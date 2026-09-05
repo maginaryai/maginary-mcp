@@ -1,5 +1,7 @@
 # maginary-mcp
 
+[![PyPI](https://img.shields.io/pypi/v/maginary-mcp)](https://pypi.org/project/maginary-mcp/) [![Python](https://img.shields.io/pypi/pyversions/maginary-mcp)](https://pypi.org/project/maginary-mcp/) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Model Context Protocol server for [Maginary](https://maginary.ai) — enumerate the prompt-DSL flags the engine accepts, kick off generations, and poll for results, all from inside your MCP-compatible client (Claude Desktop, Cursor, Continue, custom).
 
 ## why
