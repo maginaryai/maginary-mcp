@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>maginary mcp</title>
+<meta name="description" content="midjourney-style ai image and video generation for agents. connect any mcp client to https://mcp.maginary.ai/mcp and pay with an api key or per call in usdc.">
+<meta name="robots" content="noindex, follow">
+<link rel="canonical" href="https://maginary.ai/mcp">
+<link rel="icon" href="https://maginary.ai/favicon-32x32.png" sizes="32x32">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
+<style>
+  /* tokens mirror shared/src/css/base.css (.dark), the app and landing palette */
+  :root {
+    --background: 250 84% 7%;
+    --background-end: 245 32% 11%;
+    --foreground: 0 0% 82%;
+    --muted-foreground: 33 12% 58%;
+    --primary: 38 55% 45%;
+    --primary-bright: 41 65% 57%;
+    --logo: #fb7304;
+    --glass-bg: rgba(255, 255, 255, 0.04);
+    --glass-border: rgba(255, 255, 255, 0.16);
+    --star-bright: 0 0% 85%;
+    --star-subtle: 0 0% 60%;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: "Poppins", system-ui, -apple-system, sans-serif;
+    font-weight: 400;
+    color: hsl(var(--foreground));
+    background: hsl(var(--background));
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* space */
+  .space {
+    position: fixed; inset: 0; z-index: -1; overflow: hidden;
+    background: linear-gradient(to bottom,
+      color-mix(in oklab, hsl(var(--background)), white 8%),
+      hsl(var(--background)),
+      color-mix(in oklab, hsl(var(--background-end)), black 15%));
+  }
+  .space::before {           /* the top glow from the landing */
+    content: ""; position: absolute; left: 50%; top: -120px;
+    width: 800px; height: 420px; transform: translateX(-50%);
+    background: radial-gradient(closest-side, hsl(var(--primary) / .28), hsl(var(--primary) / .08) 55%, transparent);
+    filter: blur(40px); opacity: .8;
+  }
+  .stars, .stars::after {
+    position: absolute; inset: 0; content: "";
+    background-repeat: repeat; background-size: 900px 700px;
+  }
+  .stars {
+    background-image:
+      radial-gradient(1.2px 1.2px at 12% 18%, hsl(var(--star-bright)) 50%, transparent 51%),
+      radial-gradient(1px 1px at 78% 8%,   hsl(var(--star-subtle)) 50%, transparent 51%),
+      radial-gradient(1.6px 1.6px at 55% 62%, hsl(var(--star-bright)) 50%, transparent 51%),
+      radial-gradient(1px 1px at 30% 80%,  hsl(var(--star-subtle)) 50%, transparent 51%),
+      radial-gradient(1.3px 1.3px at 90% 45%, hsl(var(--primary) / .7) 50%, transparent 51%),
+      radial-gradient(1px 1px at 5% 55%,   hsl(var(--star-subtle)) 50%, transparent 51%),
+      radial-gradient(1.4px 1.4px at 66% 30%, hsl(var(--star-bright)) 50%, transparent 51%),
+      radial-gradient(1px 1px at 42% 5%,   hsl(var(--primary) / .6) 50%, transparent 51%),
+      radial-gradient(1.1px 1.1px at 20% 40%, hsl(var(--star-subtle)) 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 84% 78%, hsl(var(--star-bright)) 50%, transparent 51%);
+    animation: drift 240s linear infinite;
+  }
+  .stars::after {
+    background-image:
+      radial-gradient(1px 1px at 48% 22%,   hsl(var(--star-subtle)) 50%, transparent 51%),
+      radial-gradient(1.8px 1.8px at 8% 88%, hsl(var(--star-bright)) 50%, transparent 51%),
+      radial-gradient(1px 1px at 70% 92%,   hsl(var(--star-subtle)) 50%, transparent 51%),
+      radial-gradient(1.2px 1.2px at 95% 15%, hsl(var(--primary) / .6) 50%, transparent 51%),
+      radial-gradient(1px 1px at 36% 50%,   hsl(var(--star-subtle)) 50%, transparent 51%);
+    background-size: 1300px 900px;
+    animation: drift 380s linear infinite reverse;
+    opacity: .7;
+  }
+  @keyframes drift { to { background-position: 900px 700px; } }
+  @media (prefers-reduced-motion: reduce) { .stars, .stars::after { animation: none; } }
+
+  /* layout */
+  main { max-width: 760px; margin: 0 auto; padding: 72px 24px 96px; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; text-decoration: none; color: inherit; }
+  .brand svg { width: 34px; height: 34px; flex: none; }
+  .brand span { font-weight: 500; font-size: 18px; letter-spacing: .01em; }
+  .brand small { color: hsl(var(--muted-foreground)); font-weight: 400; margin-left: 6px; }
+
+  h1 {
+    margin: 0 0 14px; font-weight: 700; line-height: 1.12; letter-spacing: -0.02em;
+    font-size: clamp(30px, 6vw, 50px); text-wrap: balance;
+    background: linear-gradient(90deg, hsl(var(--foreground)), hsl(var(--primary) / .85), hsl(var(--foreground)));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede { margin: 0 0 8px; font-size: 18px; color: hsl(var(--muted-foreground)); }
+  .lede strong { color: hsl(var(--foreground)); font-weight: 600; }
+  .sub { margin: 0 0 44px; color: hsl(var(--muted-foreground) / .85); }
+
+  .card {
+    background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 16px;
+    padding: 22px 24px; margin-bottom: 18px;
+    backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  }
+  .label {
+    font-size: 12px; font-weight: 500; letter-spacing: .08em;
+    color: hsl(var(--muted-foreground)); margin: 0 0 10px;
+  }
+  .endpoint {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    font-family: var(--mono); font-size: 15px;
+  }
+  .endpoint code { color: hsl(var(--primary-bright)); word-break: break-all; }
+  button.copy {
+    font: inherit; font-family: "Poppins", sans-serif; font-size: 12px; font-weight: 500;
+    color: hsl(var(--foreground)); background: transparent; border: 1px solid var(--glass-border);
+    border-radius: 999px; padding: 4px 12px; cursor: pointer; transition: border-color .2s, color .2s;
+  }
+  button.copy:hover, button.copy:focus-visible { border-color: hsl(var(--primary)); color: hsl(var(--primary-bright)); outline: none; }
+  pre {
+    margin: 0; padding: 14px 16px; overflow-x: auto; border-radius: 10px;
+    background: rgba(0, 0, 0, .35); border: 1px solid rgba(255, 255, 255, .06);
+    font-family: var(--mono); font-size: 13px; line-height: 1.55; color: hsl(var(--foreground));
+  }
+  pre .k { color: hsl(var(--primary-bright)); }
+  pre .s { color: #c9a56b; }
+  .note { margin: 12px 0 0; font-size: 13px; color: hsl(var(--muted-foreground)); }
+  main a:not(.brand) { color: hsl(var(--muted-foreground)); text-decoration: none; border-bottom: 1px solid hsl(var(--muted-foreground) / .35); transition: color .3s, border-color .3s; }
+  main a:not(.brand):hover, main a:not(.brand):focus-visible { color: hsl(var(--primary-bright)); border-color: hsl(var(--primary-bright)); outline: none; }
+
+  ul.tools { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  ul.tools li { display: grid; grid-template-columns: 170px 1fr; gap: 12px; font-size: 14px; align-items: baseline; }
+  ul.tools code { font-family: var(--mono); font-size: 13px; color: hsl(var(--primary-bright)); }
+  ul.tools span { color: hsl(var(--muted-foreground)); }
+  @media (max-width: 520px) { ul.tools li { grid-template-columns: 1fr; gap: 2px; } }
+
+  .pay { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .pay h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+  .pay p { margin: 0; font-size: 13px; color: hsl(var(--muted-foreground)); }
+  @media (max-width: 520px) { .pay { grid-template-columns: 1fr; } }
+
+  .foot {
+    margin-top: 40px; display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center;
+    font-size: 13px; color: hsl(var(--muted-foreground));
+  }
+  .foot .v { margin-left: auto; font-family: var(--mono); font-size: 12px; opacity: .7; }
+</style>
+</head>
+<body>
+<div class="space" aria-hidden="true"><div class="stars"></div></div>
+
+<main>
+  <a class="brand" href="https://maginary.ai">
+    <svg viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="45" cy="45" r="45" fill="#040404"/>
+      <circle cx="45" cy="45" r="25" fill="#fb7304"/>
+    </svg>
+    <span>maginary<small>mcp</small></span>
+  </a>
+
+  <h1>image + video generation, for your agents</h1>
+  <p class="lede"><strong>midjourney-style</strong> results with a <code style="font-family:var(--mono);font-size:.9em">--flag</code> prompt language, over the model context protocol.</p>
+  <p class="sub">connect once. pay with an api key, or top it up per call in usdc. no install.</p>
+
+  <section class="card">
+    <p class="label">endpoint</p>
+    <div class="endpoint">
+      <code id="endpoint">$endpoint</code>
+      <button class="copy" type="button" data-copy="endpoint">copy</button>
+    </div>
+    <p class="note">streamable http, stateless json. <code>Accept: application/json</code> is enough, there is no session handshake.</p>
+  </section>
+
+  <section class="card">
+    <p class="label">connect: claude desktop, cursor, any mcp client</p>
+<pre id="snippet">{
+  <span class="k">"mcpServers"</span>: {
+    <span class="k">"maginary"</span>: {
+      <span class="k">"url"</span>: <span class="s">"$endpoint"</span>,
+      <span class="k">"headers"</span>: { <span class="k">"Authorization"</span>: <span class="s">"Bearer YOUR_API_KEY"</span> }
+    }
+  }
+}</pre>
+    <p class="note">catalog tools work with no key. generation tools need one: <a href="https://app.maginary.ai/dashboard#api-keys">create it in the dashboard</a>, or let your agent do it with <code>create_account</code> then <code>manage_api_key</code>.</p>
+  </section>
+
+  <section class="card">
+    <p class="label">$tool_count tools</p>
+    <ul class="tools">$tools</ul>
+  </section>
+
+  <section class="card pay">
+    <div>
+      <h3>api key</h3>
+      <p>prepaid credits from <a href="https://app.maginary.ai/dashboard">app.maginary.ai</a>. card, via stripe.</p>
+    </div>
+    <div>
+      <h3>x402: usdc on base</h3>
+      <p>out of credits? the server answers <code>402</code> with the exact price. an x402-capable agent pays from its wallet and retries. no card, no human in the loop.</p>
+    </div>
+  </section>
+
+  <p class="foot">
+    <a href="https://maginary.ai/docs">docs</a>
+    <a href="https://maginary.ai/docs/parameters.json">parameters</a>
+    <a href="https://app.maginary.ai/api/seo/openapi.json">openapi</a>
+    <a href="/health">status</a>
+    <span class="v">maginary-mcp $version</span>
+  </p>
+</main>
+
+<script>
+  document.querySelectorAll("button.copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = document.getElementById(btn.dataset.copy).textContent;
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = "copied";
+        setTimeout(function () { btn.textContent = "copy"; }, 1400);
+      });
+    });
+  });
+</script>
+</body>
+</html>

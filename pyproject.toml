@@ -1,0 +1,55 @@
+[project]
+name = "maginary-mcp"
+version = "0.3.0"
+description = "Model Context Protocol server for Maginary — enumerate flags, kick off generations, poll results."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Maginary", email = "hi@maginary.ai" }]
+keywords = ["mcp", "maginary", "ai", "image-generation", "video-generation", "midjourney", "llm-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    # >=1.19.0: first release whose FastMCP passes a returned CallToolResult
+    # through unchanged — the 402 payment-challenge path depends on it.
+    "mcp>=1.19.0,<2",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+# Only needed to run the hosted, multi-tenant Streamable-HTTP server
+# (`maginary-mcp-http`). stdio installs stay lean without it. starlette comes
+# transitively via `mcp`.
+http = ["uvicorn>=0.30"]
+# Test-only: the x402 SDK is used as an ORACLE (its MCP client's detector must
+# accept our payment_required result); the server never imports it.
+test = ["pytest>=8", "x402>=2.20.0"]
+
+[project.urls]
+Homepage = "https://maginary.ai"
+Documentation = "https://maginary.ai/docs"
+Repository = "https://github.com/maginaryai/maginary-mcp"  # not created yet — see DISTRIBUTION-DIRECTORIES.md Tier 0 #4
+"Parameters JSON" = "https://maginary.ai/docs/parameters.json"
+
+[project.scripts]
+maginary-mcp = "maginary_mcp.__main__:main"
+maginary-mcp-http = "maginary_mcp.http_app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/maginary_mcp"]
+
+# Non-Python package data (parameters snapshot, Agent Skill) lives inside
+# src/maginary_mcp/ and is picked up by hatchling automatically — keep it
+# there so building from src/ alone always works.

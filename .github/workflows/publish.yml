@@ -1,0 +1,50 @@
+name: publish to pypi
+
+# Triggered by deploy.prod.mcp.sh pushing a version tag (v0.3.1, etc.) after
+# the maintainer has already reviewed and pushed the code itself — this
+# workflow only ever republishes a commit that was already public and
+# already reviewed locally, it doesn't add a new review step of its own.
+#
+# No PyPI token exists anywhere: this uses Trusted Publishing (OIDC). PyPI
+# trusts THIS exact workflow file, in THIS exact repo, deploying to THIS
+# exact GitHub Actions environment — configured once at
+# https://pypi.org/manage/account/publishing/. The "pypi" environment
+# below should have a required reviewer set in this repo's Settings ->
+# Environments, so pushing a tag still needs one manual approval click
+# before anything actually publishes.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade build
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # required for OIDC trusted publishing — nothing else needs it
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

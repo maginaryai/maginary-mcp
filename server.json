@@ -1,0 +1,33 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.maginaryai/maginary-mcp",
+  "description": "Midjourney-style AI image + video generation with a --flag prompt DSL. Enumerate flags, kick off generations, poll for results.",
+  "version": "0.3.0",
+  "repository": {
+    "url": "https://github.com/maginaryai/maginary-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://maginary.ai",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "maginary-mcp",
+      "version": "0.3.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "MAGINARY_API_KEY",
+          "description": "Bearer token from https://app.maginary.ai/dashboard#api-keys. Required for generate/get_generation/wait_for_generation; catalog tools work without it.",
+          "isSecret": true,
+          "isRequired": false
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.maginary.ai/mcp"
+    }
+  ]
+}

@@ -1,0 +1,573 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-07-19T11:02:49.166Z",
+  "source": "https://maginary.ai/docs/parameters.json",
+  "counts": {
+    "total": 41
+  },
+  "categories": {
+    "composition": {
+      "label": "Composition",
+      "blurb": "Shape and count of the output.",
+      "order": 1
+    },
+    "seed": {
+      "label": "Determinism",
+      "blurb": "Repeatable results.",
+      "order": 2
+    },
+    "style": {
+      "label": "Style",
+      "blurb": "How the image should feel.",
+      "order": 3
+    },
+    "reference": {
+      "label": "References",
+      "blurb": "Image references and their weights.",
+      "order": 4
+    },
+    "format": {
+      "label": "Format",
+      "blurb": "PNG / JPG / WebP / SVG.",
+      "order": 5
+    },
+    "quality": {
+      "label": "Quality tier",
+      "blurb": "Resolution tiers for image outputs.",
+      "order": 6
+    },
+    "negative": {
+      "label": "Negative prompt",
+      "blurb": "What you don’t want.",
+      "order": 7
+    },
+    "edit": {
+      "label": "Editing",
+      "blurb": "Variations and upscaling.",
+      "order": 8
+    },
+    "outpaint": {
+      "label": "Outpaint",
+      "blurb": "Extend the canvas or zoom out.",
+      "order": 9
+    },
+    "video": {
+      "label": "Video",
+      "blurb": "Resolution, frame rate, duration.",
+      "order": 10
+    },
+    "model": {
+      "label": "Model triggers",
+      "blurb": "Force a specific model.",
+      "order": 11
+    },
+    "meta": {
+      "label": "Meta",
+      "blurb": "Account / demo flags.",
+      "order": 12
+    }
+  },
+  "statuses": {
+    "live": null,
+    "mostly-dead": {
+      "label": "partial",
+      "hint": "parses fine but only a couple of models act on it as a hard rule",
+      "tone": "warn"
+    },
+    "unimplemented": {
+      "label": "reserved",
+      "hint": "the parser recognizes it but explicitly errors — reserved for future work",
+      "tone": "muted"
+    }
+  },
+  "parameters": [
+    {
+      "name": "ar",
+      "aliases": ["aspect"],
+      "category": "composition",
+      "status": "live",
+      "kind": "ratio",
+      "desc": "Aspect ratio of the output. Accepts `w:h` or one of the named aliases.",
+      "values": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9",
+        "21:9",
+        "square",
+        "portrait",
+        "landscape",
+        "wide",
+        "ultrawide",
+        "vertical"
+      ],
+      "default": "model-specific (usually 1:1)",
+      "examples": [
+        "cinematic portrait --ar 16:9",
+        "phone wallpaper --ar 9:16",
+        "poster art --ar 2:3"
+      ],
+      "sinceDate": "2025-07"
+    },
+    {
+      "name": "output-count",
+      "aliases": ["1", "2", "3", "4"],
+      "category": "composition",
+      "status": "live",
+      "kind": "group",
+      "displayForm": "--<N>",
+      "copyable": false,
+      "desc": "How many variations to return. Type the number directly — `--1`, `--2`, `--3`, or `--4`.",
+      "values": ["--1", "--2", "--3", "--4"],
+      "default": "model-specific (usually 4 for images, 1 for videos)",
+      "examples": ["a cyberpunk dragon --2", "quick sketch --1"],
+      "sinceDate": "2025-08"
+    },
+    {
+      "name": "seed",
+      "aliases": [],
+      "category": "seed",
+      "status": "live",
+      "kind": "int",
+      "desc": "Freeze the RNG. Same seed + same prompt + same model = same image. Some models may ignore it.",
+      "range": "0 – 4294967295",
+      "examples": ["forest at dusk --seed 42", "portrait --seed 99999"],
+      "sinceDate": "2025-07"
+    },
+    {
+      "name": "transparent",
+      "aliases": [],
+      "category": "style",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Hard filter: only models that produce a native transparent (alpha) result are considered. Combines with model triggers; if the intersection is empty you get a clear error.",
+      "examples": ["app icon on transparent background --transparent"],
+      "sinceDate": "2026-05"
+    },
+    {
+      "name": "sref",
+      "aliases": [],
+      "category": "reference",
+      "status": "live",
+      "kind": "url-list",
+      "desc": "Style reference. Pass one or more image URLs; each can carry a per-URL weight via `::N`.",
+      "range": "weight per URL: 0 – 1000",
+      "examples": [
+        "a knight --sref https://cdn.example.com/style.jpg",
+        "ancient temple --sref https://a.jpg::500 https://b.jpg::200"
+      ]
+    },
+    {
+      "name": "sw",
+      "aliases": [],
+      "category": "reference",
+      "status": "live",
+      "kind": "float",
+      "desc": "Global style-reference weight. Applies to whatever `--sref` URLs are set.",
+      "range": "0 – 1000",
+      "examples": ["portrait --sref https://x.jpg --sw 400"]
+    },
+    {
+      "name": "cref",
+      "aliases": [],
+      "category": "reference",
+      "status": "unimplemented",
+      "kind": "url",
+      "desc": "Character reference URL. Reserved — the parser accepts it but explicitly errors \"not yet implemented\" so it never silently no-ops.",
+      "note": "Planned. Timeline unspecified."
+    },
+    {
+      "name": "cw",
+      "aliases": [],
+      "category": "reference",
+      "status": "unimplemented",
+      "kind": "float",
+      "desc": "Character-reference weight. Reserved alongside `--cref`.",
+      "range": "0 – 100",
+      "note": "Planned alongside `--cref`."
+    },
+    {
+      "name": "no",
+      "aliases": [],
+      "category": "negative",
+      "status": "mostly-dead",
+      "kind": "string",
+      "desc": "Negative prompt — the things you don't want. Only a few of our models honor it as a hard exclusion; on the rest it becomes a hint that biases the prompt enhancer. The engine does NOT narrow the model pool when `--no` is present, so which behavior you get depends on which model the selector picks.",
+      "examples": [
+        "forest landscape --no watermark, text, low-quality --ar 16:9"
+      ],
+      "sinceDate": "2025-07"
+    },
+    {
+      "name": "png",
+      "aliases": [],
+      "category": "format",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force PNG output.",
+      "examples": ["icon --png"]
+    },
+    {
+      "name": "jpg",
+      "aliases": ["jpeg"],
+      "category": "format",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force JPEG output.",
+      "examples": ["photo --jpg"]
+    },
+    {
+      "name": "webp",
+      "aliases": [],
+      "category": "format",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force WebP output. Falls back to PNG on providers that can’t emit WebP."
+    },
+    {
+      "name": "svg",
+      "aliases": [],
+      "category": "format",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force vector SVG output. Only picked when a vector-capable model can service the prompt.",
+      "examples": ["logo mark --svg"]
+    },
+    {
+      "name": "2k",
+      "aliases": [],
+      "category": "quality",
+      "status": "live",
+      "kind": "flag",
+      "desc": "High-resolution image tier (~2048 px on the long side). Costs more credits.",
+      "examples": ["product hero shot --ar 16:9 --2k"],
+      "sinceDate": "2026-01"
+    },
+    {
+      "name": "4k",
+      "aliases": [],
+      "category": "quality",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Ultra-high-resolution image tier (~4096 px on the long side). Costs more credits.",
+      "examples": ["cinematic still --ar 16:9 --4k"],
+      "sinceDate": "2026-01"
+    },
+    {
+      "name": "upscale",
+      "aliases": [],
+      "category": "edit",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Upscale an input image (the `upscale_2x` operation).",
+      "examples": ["--upscale"]
+    },
+    {
+      "name": "vary",
+      "aliases": [],
+      "category": "edit",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Create a variation of an image (the `vary_strong` operation)."
+    },
+    {
+      "name": "varysubtle",
+      "aliases": [],
+      "category": "edit",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Subtle variation of an image."
+    },
+    {
+      "name": "varystrong",
+      "aliases": [],
+      "category": "edit",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Strong variation of an image."
+    },
+    {
+      "name": "panleft",
+      "aliases": ["pan_left", "extendleft"],
+      "category": "outpaint",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Extend the canvas to the left. Append a companion `--<amount>` flag (fraction, e.g. `--0.5`, or pixels, e.g. `--512px`) to control how far.",
+      "range": "amount fraction: 0.01 – 1.0 · pixels: 1 – 2048",
+      "examples": ["--panleft --0.5", "--panleft --512px"]
+    },
+    {
+      "name": "panright",
+      "aliases": ["pan_right", "extendright"],
+      "category": "outpaint",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Extend the canvas to the right. Companion `--<amount>` flag controls how far.",
+      "range": "amount fraction: 0.01 – 1.0 · pixels: 1 – 2048",
+      "examples": ["--panright --0.5", "--panright --512px"]
+    },
+    {
+      "name": "panup",
+      "aliases": ["pan_up", "extendup"],
+      "category": "outpaint",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Extend the canvas upward. Companion `--<amount>` flag controls how far.",
+      "range": "amount fraction: 0.01 – 1.0 · pixels: 1 – 2048"
+    },
+    {
+      "name": "pandown",
+      "aliases": ["pan_down", "extenddown"],
+      "category": "outpaint",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Extend the canvas downward. Companion `--<amount>` flag controls how far.",
+      "range": "amount fraction: 0.01 – 1.0 · pixels: 1 – 2048"
+    },
+    {
+      "name": "zoomout",
+      "aliases": ["zoomout1.5x", "zoomout15x"],
+      "category": "outpaint",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Zoom out 1.5×. Original stays in place; new content fills the border."
+    },
+    {
+      "name": "zoomout2x",
+      "aliases": [],
+      "category": "outpaint",
+      "status": "mostly-dead",
+      "kind": "flag",
+      "desc": "Zoom out 2×. Same idea as `--zoomout` but wider border.",
+      "note": "Under development — the underlying `zoom_out_2x` operation is in the engine's DISABLED_OPERATIONS set; calls today will not run. Use `--zoomout` (1.5×) for now."
+    },
+    {
+      "name": "zoomoutexpand",
+      "aliases": ["zoomoutexpand1.5x", "zoomoutexpand15x"],
+      "category": "outpaint",
+      "status": "mostly-dead",
+      "kind": "flag",
+      "desc": "Zoom-out variant that expands the composition rather than just adding border.",
+      "note": "Under development — the underlying `zoom_out_expand_1_5x` operation is in the engine's DISABLED_OPERATIONS set; calls today will not run."
+    },
+    {
+      "name": "zoomoutexpand2x",
+      "aliases": [],
+      "category": "outpaint",
+      "status": "mostly-dead",
+      "kind": "flag",
+      "desc": "Expand-out variant at 2×.",
+      "note": "Under development — the underlying `zoom_out_expand_2x` operation is in the engine's DISABLED_OPERATIONS set; calls today will not run."
+    },
+    {
+      "name": "mp4",
+      "aliases": [],
+      "category": "video",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Trigger video generation. Becomes img2vid if input images are present, otherwise txt2vid.",
+      "examples": ["clouds rolling over mountains --mp4 --5sec --720p"]
+    },
+    {
+      "name": "video-resolution",
+      "aliases": [
+        "2160p",
+        "4k",
+        "4k24",
+        "4k30",
+        "4k60",
+        "1080p",
+        "720p",
+        "540p",
+        "480p",
+        "1024p",
+        "2160p24",
+        "1080p24",
+        "720p24",
+        "540p24",
+        "480p24",
+        "1024p30",
+        "2160p24fps",
+        "4k24fps",
+        "4k30fps",
+        "4k60fps",
+        "1080p24fps",
+        "720p24fps",
+        "540p24fps",
+        "480p24fps",
+        "1024p30fps"
+      ],
+      "category": "video",
+      "status": "live",
+      "kind": "group",
+      "displayForm": "--<resolution>",
+      "copyable": false,
+      "desc": "Video resolution. Type the value directly — `--480p`, `--720p`, `--1080p`, etc. 4k is requested with `--2160p` or `--4k` (also `--4k60fps`) and is Seedance 2 Pro only — pair with `--seedance2pro` or `--flagship`. Note: `--4k` means the 4K *image* tier on image prompts, and 4k video on `--mp4` prompts. Frame-rate suffix (`p24`, `p30fps`) is also accepted; Seedance renders 24fps.",
+      "values": [
+        "--480p",
+        "--540p",
+        "--720p",
+        "--1024p",
+        "--1080p",
+        "--2160p / --4k (4k, Seedance 2 Pro)",
+        "--480p24 / --480p24fps",
+        "--540p24 / --540p24fps",
+        "--720p24 / --720p24fps",
+        "--1024p30 / --1024p30fps",
+        "--1080p24 / --1080p24fps"
+      ],
+      "examples": ["neon city --mp4 --1080p", "cinematic dragon --mp4 --seedance2pro --4k"]
+    },
+    {
+      "name": "video-fps",
+      "aliases": ["24fps", "30fps", "50fps", "60fps"],
+      "category": "video",
+      "status": "live",
+      "kind": "group",
+      "displayForm": "--<fps>",
+      "copyable": false,
+      "desc": "Frame rate. 24 and 30 are the safest across providers; higher rates depend on the selected model.",
+      "values": ["--24fps", "--30fps", "--50fps", "--60fps"],
+      "examples": ["drone shot --mp4 --24fps"]
+    },
+    {
+      "name": "video-duration",
+      "aliases": [
+        "4s",
+        "5s",
+        "6s",
+        "8s",
+        "10s",
+        "12s",
+        "4sec",
+        "5sec",
+        "6sec",
+        "8sec",
+        "10sec",
+        "12sec"
+      ],
+      "category": "video",
+      "status": "live",
+      "kind": "group",
+      "displayForm": "--<duration>",
+      "copyable": false,
+      "desc": "Clip length. Accepts either the short `--5s` or the long `--5sec` form.",
+      "values": [
+        "--4s / --4sec",
+        "--5s / --5sec",
+        "--6s / --6sec",
+        "--8s / --8sec",
+        "--10s / --10sec",
+        "--12s / --12sec"
+      ],
+      "examples": ["drone shot over reef --mp4 --10sec --1080p"]
+    },
+    {
+      "name": "flagship",
+      "aliases": [],
+      "category": "model",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force the flagship (highest-quality) model of whatever operation you're running. Works universally.",
+      "examples": [
+        "brand ad --ar 16:9 --flagship",
+        "cinematic clip --mp4 --flagship"
+      ],
+      "sinceDate": "2025-10"
+    },
+    {
+      "name": "sora",
+      "aliases": ["sora2", "sora2pro"],
+      "category": "model",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force OpenAI Sora 2 Pro (video).",
+      "targetsModel": "Sora 2 Pro",
+      "compat": ["Only one model trigger per prompt."],
+      "examples": ["glass shattering slow-mo --mp4 --sora2pro --1080p"],
+      "sinceDate": "2025-10"
+    },
+    {
+      "name": "soralite",
+      "aliases": ["sora2lite"],
+      "category": "model",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force OpenAI Sora Lite (video). Cheaper than Sora Pro.",
+      "targetsModel": "Sora Lite",
+      "sinceDate": "2025-10"
+    },
+    {
+      "name": "nanobananapro",
+      "aliases": ["nbp", "nbpro"],
+      "category": "model",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force Google Nano-Banana Pro. Works for both txt2img and img2img — the router picks the variant by input.",
+      "targetsModel": "Nano-Banana Pro",
+      "examples": ["product mockup --nanobananapro --2k"],
+      "sinceDate": "2026-05"
+    },
+    {
+      "name": "nb2",
+      "aliases": [],
+      "category": "model",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force Google Nano-Banana 2 for txt2img / img2img.",
+      "targetsModel": "Nano-Banana 2",
+      "sinceDate": "2026-03"
+    },
+    {
+      "name": "gpt2",
+      "aliases": ["gptimage2"],
+      "category": "model",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force OpenAI GPT-image-2 (medium quality) for txt2img / img2img.",
+      "targetsModel": "GPT-image-2 (Medium)",
+      "sinceDate": "2026-05"
+    },
+    {
+      "name": "gpt2high",
+      "aliases": ["gptimage2high"],
+      "category": "model",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force GPT-image-2 (High quality). Slower + more expensive than `--gpt2`.",
+      "targetsModel": "GPT-image-2 (High)",
+      "sinceDate": "2026-05"
+    },
+    {
+      "name": "seedance2",
+      "aliases": [],
+      "category": "model",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force Seedance 2 Fast (video). Works for txt2vid / img2vid / ref2vid.",
+      "targetsModel": "Seedance 2 Fast",
+      "sinceDate": "2026-05"
+    },
+    {
+      "name": "seedance2pro",
+      "aliases": [],
+      "category": "model",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Force Seedance 2 Pro (video). Works for txt2vid / img2vid / ref2vid.",
+      "targetsModel": "Seedance 2 Pro",
+      "sinceDate": "2026-05"
+    },
+    {
+      "name": "demo",
+      "aliases": [],
+      "category": "meta",
+      "status": "live",
+      "kind": "flag",
+      "desc": "Signed-in-only: access seeded demo generations without spending real credits."
+    }
+  ]
+}
