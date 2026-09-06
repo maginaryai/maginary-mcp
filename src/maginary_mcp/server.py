@@ -500,7 +500,8 @@ def upload_image(image_base64: str, filename: str, ctx: Context | None = None) -
 
     Args:
         image_base64: The image file contents, base64-encoded.  Accepts
-            PNG, JPEG, or WebP.
+            PNG, JPEG, WebP, or HEIC/HEIF (auto-converted to JPEG;
+            requires ``pillow-heif``).
         filename: Original filename (e.g. ``"photo.png"``).  Used for
             Content-Disposition; the backend re-encodes to WebP regardless.
 

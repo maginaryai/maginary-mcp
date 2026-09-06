@@ -18,6 +18,7 @@ import hashlib
 import io
 import json
 import logging
+import mimetypes
 import os
 import re
 import struct
@@ -445,6 +446,31 @@ def create_generation(
         return record
 
 
+_HEIF_BRANDS = {b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"mif1", b"msf1"}
+
+
+def _is_heic(data: bytes) -> bool:
+    return len(data) >= 12 and data[4:8] == b"ftyp" and data[8:12] in _HEIF_BRANDS
+
+
+def _convert_heic_to_jpeg(data: bytes) -> bytes:
+    try:
+        import pillow_heif  # noqa: F401 — registers the HEIF opener with Pillow
+        from PIL import Image
+    except ImportError:
+        raise ValueError(
+            "HEIC/HEIF image detected but conversion libraries are not installed. "
+            "Install with:  pip install Pillow pillow-heif"
+        )
+    pillow_heif.register_heif_opener()
+    img = Image.open(io.BytesIO(data))
+    if img.mode in ("RGBA", "LA"):
+        img = img.convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=95)
+    return buf.getvalue()
+
+
 def upload_image(
     file_data: bytes,
     filename: str,
@@ -454,6 +480,10 @@ def upload_image(
     The backend converts to WebP, uploads to S3, deduplicates by MD5.
     Costs 1 upload credit.
     """
+    if _is_heic(file_data):
+        file_data = _convert_heic_to_jpeg(file_data)
+        filename = Path(filename).stem + ".jpg"
+
     md5_hash = hashlib.md5(file_data).hexdigest()
     width, height = _image_dimensions(file_data)
 
@@ -472,7 +502,7 @@ def upload_image(
                 "original_height": str(height),
                 "original_size": str(len(file_data)),
             },
-            files={"file": (filename, io.BytesIO(file_data), "application/octet-stream")},
+            files={"file": (filename, io.BytesIO(file_data), mimetypes.guess_type(filename)[0] or "application/octet-stream")},
         )
         if resp.status_code == 402:
             data = _parsed_body(resp)
