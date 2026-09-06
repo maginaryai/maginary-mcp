@@ -13,32 +13,11 @@ Maginary uses a Midjourney-style `--flag` prompt DSL over an async HTTP API. Thi
 - offers `get_generation` + `wait_for_generation` for polling to a terminal state
 - works offline for the catalog tools (ships a bundled snapshot; refreshed from the live docs endpoint at startup when reachable)
 
-## install
+## connect
 
-```bash
-uvx maginary-mcp                   # ephemeral run via uv
-# — or —
-pip install maginary-mcp
-maginary-mcp
-```
+This is an MCP server — you don't run it directly; your AI client (Claude Desktop, Cursor, etc.) launches and talks to it behind the scenes. Just add one config block and start chatting.
 
-Requires Python 3.10+.
-
-## configuration
-
-Environment variables:
-
-| var | default | meaning |
-|---|---|---|
-| `MAGINARY_API_KEY` | — | Bearer token from [app.maginary.ai/dashboard#api-keys](https://app.maginary.ai/dashboard#api-keys). **Required** for `generate` / `get_generation` / `wait_for_generation`. Catalog tools work without it. |
-| `MAGINARY_BASE_URL` | `https://app.maginary.ai/api` | Override for staging or self-hosted. |
-| `MAGINARY_PUBLIC_HOST` | `app.maginary.ai` | Hosted mode only. Sent to the backend as `X-Forwarded-Host` (with `-Proto`/`-For`) when `MAGINARY_BASE_URL` is an internal address, so the backend builds public URLs. |
-| `MAGINARY_MCP_REQUIRE_AUTH` | off | Hosted mode only. On: every `/mcp` call needs a Bearer (OAuth token or API key); without one the server answers 401 + `WWW-Authenticate` pointing at `/.well-known/oauth-protected-resource`, which is how Claude/ChatGPT start the login. Trade-off: a wallet-only agent has no Bearer to send, so with the gate on it must make its first x402 payment over plain HTTP (`POST /api/gens/` returns an API key) and connect with that key; the 401 body says so. |
-| `MAGINARY_OAUTH_ISSUER` | `https://app.maginary.ai/o` | The authorization server named in the protected-resource metadata (the backend, django-oauth-toolkit). |
-| `MAGINARY_MCP_RESOURCE_URL` | `https://mcp.maginary.ai/mcp` | This server's canonical resource identifier (RFC 8707 audience). |
-| `MAGINARY_MCP_LOG_LEVEL` | `INFO` | Standard Python log level; goes to stderr (stdout is reserved for MCP JSON-RPC). |
-
-### Claude Desktop config
+### Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or the equivalent on your OS:
 
@@ -47,14 +26,35 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
   "mcpServers": {
     "maginary": {
       "command": "uvx",
-      "args": ["maginary-mcp"],
-      "env": {
-        "MAGINARY_API_KEY": "sk-mag-…"
-      }
+      "args": ["maginary-mcp"]
     }
   }
 }
 ```
+
+Restart Claude Desktop. Ask it to generate an image — it will see Maginary's tools automatically.
+
+**No account yet?** No problem — Claude will walk you through signup (just give it your email). Already have an API key? Add it to skip that step:
+
+```json
+"env": { "MAGINARY_API_KEY": "sk-mag-…" }
+```
+
+Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/). Alternatively: `pip install maginary-mcp`.
+
+## configuration
+
+Environment variables (all optional for local use):
+
+| var | default | meaning |
+|---|---|---|
+| `MAGINARY_API_KEY` | — | Bearer token from [app.maginary.ai/dashboard#api-keys](https://app.maginary.ai/dashboard#api-keys). Skips the in-chat signup flow. Catalog tools work without it. |
+| `MAGINARY_BASE_URL` | `https://app.maginary.ai/api` | Override for staging or self-hosted. |
+| `MAGINARY_PUBLIC_HOST` | `app.maginary.ai` | Hosted mode only. Sent to the backend as `X-Forwarded-Host` (with `-Proto`/`-For`) when `MAGINARY_BASE_URL` is an internal address, so the backend builds public URLs. |
+| `MAGINARY_MCP_REQUIRE_AUTH` | off | Hosted mode only. On: every `/mcp` call needs a Bearer (OAuth token or API key); without one the server answers 401 + `WWW-Authenticate` pointing at `/.well-known/oauth-protected-resource`, which is how Claude/ChatGPT start the login. Trade-off: a wallet-only agent has no Bearer to send, so with the gate on it must make its first x402 payment over plain HTTP (`POST /api/gens/` returns an API key) and connect with that key; the 401 body says so. |
+| `MAGINARY_OAUTH_ISSUER` | `https://app.maginary.ai/o` | The authorization server named in the protected-resource metadata (the backend, django-oauth-toolkit). |
+| `MAGINARY_MCP_RESOURCE_URL` | `https://mcp.maginary.ai/mcp` | This server's canonical resource identifier (RFC 8707 audience). |
+| `MAGINARY_MCP_LOG_LEVEL` | `INFO` | Standard Python log level; goes to stderr (stdout is reserved for MCP JSON-RPC). |
 
 ## hosted (no-install) — Streamable HTTP
 
@@ -201,8 +201,10 @@ list/search responses carry `source` (`live` vs `bundled-snapshot`).
 
 ### generation (auth required)
 
-- **`generate(prompt, callback_url?)`** — `POST /api/gens/`
-- **`get_generation(uuid)`** — `GET /api/gens/{uuid}/`
+- **`generate(prompt, callback_url?)`** — `POST /api/gens/`. Supports img2img: place image URLs in the prompt. Multiple URLs = multi-input compositing. Use `--sref <url>` for style-only transfer (not img2img).
+- **`upload_image(image_base64, filename)`** — `POST /api/images/upload/`. Returns a CDN URL for use in img2img prompts.
+- **`execute_action(generation_uuid, action_type, parent_image_index?, prompt?, callback_url?)`** — `POST /api/gens/{uuid}/actions/`. Run a follow-up on a completed generation's image (upscale, vary, pan, zoom, img2vid, reroll).
+- **`get_generation(uuid)`** — `GET /api/gens/{uuid}/`. Response includes `processing_result.available_actions` mapping slots to valid action types.
 - **`wait_for_generation(uuid, timeout_s=45)`** — poll to `done` / `failed`; a `timeout` result means still running — call again
 
 ## worked example
@@ -216,6 +218,14 @@ The LLM calls `search_parameters("aspect")` and gets back the `--ar` entry with 
 > "Now generate a cinematic portrait 16:9 with the flagship model."
 
 The LLM calls `generate("a cinematic portrait --ar 16:9 --flagship")`, gets a `uuid`, then `wait_for_generation(uuid)` and reads `image_urls[]` out of the terminal record.
+
+> "Upscale the first image."
+
+The LLM checks `processing_result.available_actions["0"]`, sees `"upscale_2x"`, calls `execute_action(uuid, "upscale_2x", 0)`, gets a new `uuid`, then `wait_for_generation(new_uuid)`.
+
+> "Edit this photo to look like a watercolor." *(user provides a local image)*
+
+The LLM calls `upload_image(base64_data, "photo.png")` → gets a CDN URL, then `generate("https://cdn.maginary.ai/…/photo.webp reimagine as watercolor painting")`.
 
 ## catalog freshness
 

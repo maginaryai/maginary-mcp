@@ -14,10 +14,13 @@ surface the real reason).
 from __future__ import annotations
 
 import base64
+import hashlib
+import io
 import json
 import logging
 import os
 import re
+import struct
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -442,6 +445,138 @@ def create_generation(
         return record
 
 
+def upload_image(
+    file_data: bytes,
+    filename: str,
+) -> dict[str, Any]:
+    """POST /images/upload/ — upload an image and return its public URL.
+
+    The backend converts to WebP, uploads to S3, deduplicates by MD5.
+    Costs 1 upload credit.
+    """
+    md5_hash = hashlib.md5(file_data).hexdigest()
+    width, height = _image_dimensions(file_data)
+
+    headers = _headers()
+    # Multipart upload — drop Content-Type so httpx sets the boundary.
+    headers.pop("Content-Type", None)
+
+    with _client() as client:
+        resp = client.post(
+            f"{_base_url()}/images/upload/",
+            headers=headers,
+            data={
+                "md5_hash": md5_hash,
+                "original_filename": filename,
+                "original_width": str(width),
+                "original_height": str(height),
+                "original_size": str(len(file_data)),
+            },
+            files={"file": (filename, io.BytesIO(file_data), "application/octet-stream")},
+        )
+        if resp.status_code == 402:
+            data = _parsed_body(resp)
+            raise PaymentRequiredError(
+                message=_detail_from_data(data) or "Insufficient upload credits",
+                challenge=data or None,
+                billing_url=(data or {}).get("billing_url"),
+            )
+        _raise_for_status(resp)
+        return resp.json()
+
+
+def _image_dimensions(data: bytes) -> tuple[int, int]:
+    """Extract (width, height) from PNG, JPEG, or WebP header bytes.
+
+    Zero-dependency: parses the binary header with struct.  Returns
+    (0, 0) for unrecognised formats — the backend will still accept the
+    upload; it derives its own dimensions from the decoded image.
+    """
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24:
+        w, h = struct.unpack(">II", data[16:24])
+        return int(w), int(h)
+
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        # VP8 lossy
+        if data[12:16] == b"VP8 " and len(data) >= 30:
+            w = struct.unpack_from("<H", data, 26)[0] & 0x3FFF
+            h = struct.unpack_from("<H", data, 28)[0] & 0x3FFF
+            return int(w), int(h)
+        # VP8L lossless
+        if data[12:16] == b"VP8L" and len(data) >= 25:
+            bits = struct.unpack_from("<I", data, 21)[0]
+            w = (bits & 0x3FFF) + 1
+            h = ((bits >> 14) & 0x3FFF) + 1
+            return int(w), int(h)
+
+    if data[:2] in (b"\xff\xd8",):  # JPEG
+        offset = 2
+        while offset < len(data) - 1:
+            if data[offset] != 0xFF:
+                break
+            marker = data[offset + 1]
+            if marker in (0xC0, 0xC1, 0xC2):  # SOF0, SOF1, SOF2
+                if offset + 9 <= len(data):
+                    h, w = struct.unpack(">HH", data[offset + 5 : offset + 9])
+                    return int(w), int(h)
+                break
+            if marker in (0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9):
+                offset += 2
+                continue
+            if offset + 4 > len(data):
+                break
+            seg_len = struct.unpack(">H", data[offset + 2 : offset + 4])[0]
+            offset += 2 + seg_len
+
+    return (0, 0)
+
+
+def execute_action(
+    generation_uuid: str,
+    action_type: str,
+    parent_image_index: int | None = None,
+    prompt: str | None = None,
+    callback_url: str | None = None,
+    payment: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """POST /gens/{uuid}/actions/ — run a follow-up action on a generation.
+
+    Returns the newly created child generation record (same shape as
+    ``create_generation``).
+    """
+    body: dict[str, Any] = {"action_type": action_type}
+    if parent_image_index is not None:
+        body["parent_image_index"] = parent_image_index
+    if prompt is not None:
+        body["prompt"] = prompt
+    if callback_url:
+        body["callback_url"] = callback_url
+
+    headers = _headers()
+    if payment:
+        headers[PAYMENT_SIGNATURE_HEADER] = base64.b64encode(json.dumps(payment).encode()).decode()
+
+    with _client() as client:
+        resp = client.post(
+            f"{_base_url()}/gens/{generation_uuid}/actions/",
+            headers=headers,
+            json=body,
+        )
+        if resp.status_code == 402:
+            data = _parsed_body(resp)
+            raise PaymentRequiredError(
+                message=_detail_from_data(data) or "Insufficient credits",
+                challenge=data or None,
+                billing_url=(data or {}).get("billing_url"),
+            )
+        _raise_for_status(resp)
+        record = resp.json()
+        receipt = _decode_receipt(resp.headers.get(PAYMENT_RESPONSE_HEADER))
+        if receipt is not None:
+            record["x402_receipt"] = receipt
+        return record
+
+
 def credential_is_valid(bearer: str, timeout: float = 5.0,
                         forwarded: dict[str, str] | None = None) -> bool | None:
     """Validate a Bearer (API key or OAuth access token) by USE against the backend.
@@ -500,6 +635,19 @@ def override_api_key(key: str | None) -> Iterator[None]:
         yield
     finally:
         _request_api_key.reset(token)
+
+
+def fetch_image(url: str, timeout: float = 15.0) -> tuple[bytes, str] | None:
+    """Download image bytes from a CDN URL. Returns (data, mime_type) or None."""
+    try:
+        with _client(timeout=timeout) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            mime = resp.headers.get("content-type", "image/webp").split(";")[0].strip()
+            return resp.content, mime
+    except Exception:
+        LOG.debug("Image fetch failed for %s", url, exc_info=True)
+        return None
 
 
 def get_generation(uuid: str) -> dict[str, Any]:

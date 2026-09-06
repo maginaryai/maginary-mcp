@@ -36,11 +36,34 @@ Default (no model flag) is a solid general image model. Force one when the job c
 
 Cost scales with model + quality + video duration. If the user is cost-sensitive, prefer the default image model and skip `--4k`; reserve `--flagship`/`--sora2pro` for when quality is the priority.
 
+## Image-to-image (img2img)
+
+Place one or more **public image URLs** in the prompt, followed by editing instructions:
+
+```
+https://cdn.example.com/photo.webp reimagine as oil painting --ar 16:9
+```
+
+The engine extracts URLs automatically and switches to img2img mode. Multiple URLs trigger multi-input mode (compositing/combining). If images aren't already hosted, use `upload_image` first to get a CDN URL.
+
+**`--sref` is NOT img2img.** `--sref <url>` copies the visual *style* (colors, mood, composition) without using the image content as input. A bare URL in the prompt edits the actual image; `--sref` transfers style only.
+
 ## The generation flow (async)
 
 1. **`generate(prompt)`** → returns a record with `uuid`, `action_type`, `expected_output_count`, `processing_state`. It does **not** block.
 2. **`wait_for_generation(uuid)`** (or a webhook `callback_url`) → polls to `done`/`failed`. On `done`, `image_urls[]` holds the outputs.
-3. From an upscaled image you can follow up: upscale, vary (`--vary` / `--varysubtle` / `--varystrong`), zoom out (`--zoomout`), or pan (`--panleft/right/up/down`).
+3. **Follow-up actions:** A `done` generation's `processing_result.available_actions` maps slot indices to valid action types (e.g. `{"0": ["upscale_2x", "vary_strong", ...], "global": ["reroll"]}`). Use **`execute_action(generation_uuid, action_type, parent_image_index)`** to run one — it returns a new generation to poll.
+
+### Follow-up action types
+
+| Action | Description |
+|---|---|
+| `upscale_2x`, `upscale_1_5x` | Increase resolution |
+| `vary_strong`, `vary_subtle` | New variation (strong = more creative) |
+| `pan_left/right/up/down` | Extend canvas in a direction |
+| `zoom_out_2x`, `zoom_out_1_5x` | Pull back the view |
+| `img2vid_basic` | Animate an image to video |
+| `reroll` | Re-generate from the same prompt (global action, no slot index) |
 
 ## No MCP? Use the REST API directly
 
@@ -54,6 +77,15 @@ curl -X POST https://app.maginary.ai/api/gens/ \
   -d '{"prompt": "a fox in autumn foliage --ar 16:9"}'
 # 2. poll until processing_state is 'done' (outputs in image_urls[]) or 'failed'
 curl https://app.maginary.ai/api/gens/<uuid>/ -H "Authorization: Bearer $MAGINARY_API_KEY"
+# 3. follow-up action on a specific output image
+curl -X POST https://app.maginary.ai/api/gens/<uuid>/actions/ \
+  -H "Authorization: Bearer $MAGINARY_API_KEY" -H "Content-Type: application/json" \
+  -d '{"action_type": "upscale_2x", "parent_image_index": 0}'
+# 4. upload an image for img2img
+curl -X POST https://app.maginary.ai/api/images/upload/ \
+  -H "Authorization: Bearer $MAGINARY_API_KEY" \
+  -F file=@photo.png -F md5_hash=<md5> -F original_filename=photo.png \
+  -F original_width=1024 -F original_height=768 -F original_size=524288
 ```
 
 `POST /gens/` also accepts `callback_url` for webhook delivery instead of polling.

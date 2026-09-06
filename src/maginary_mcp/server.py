@@ -17,6 +17,7 @@ Tools are grouped into four categories:
 
 from __future__ import annotations
 
+import base64
 import functools
 import json
 import logging
@@ -25,7 +26,7 @@ import sys
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult, ImageContent, TextContent
 
 from . import __version__
 from .api import (
@@ -33,8 +34,11 @@ from .api import (
     AuthError,
     PaymentRequiredError,
     create_generation,
+    execute_action as api_execute_action,
+    fetch_image,
     override_api_key,
     get_generation as api_get_generation,
+    upload_image as api_upload_image,
     wait_for_generation as api_wait_for_generation,
     register_account,
     get_account_status,
@@ -76,10 +80,10 @@ mcp = FastMCP(
         "— x402 handles payment on-chain). The $10 novice_pack is the recommended "
         "starting point. API key creation and checkout both require a verified email.\n\n"
         "**Prompt DSL essentials:** flags go at the END of the prompt. `--1` `--2` "
-        "`--3` `--4` = number of images (default 4; use `--1` for one image, it is "
-        "the cheapest), `--ar 16:9` = aspect ratio, `--v <model>` = model. If the "
-        "user names a flag you don't know, call `get_parameter(name)` — never guess "
-        "or drop it.\n\n"
+        "`--3` `--4` = number of images (default 4; only specify if the user asks "
+        "for a specific count), `--ar 16:9` = aspect ratio, `--v <model>` = model. "
+        "If the user names a flag you don't know, call `get_parameter(name)` — "
+        "never guess or drop it.\n\n"
         f"**Every flag that exists, and its state:** {_DSL_MAP}\n\n"
         "**Existing users:** Use `search_parameters` / `get_parameter` to discover "
         "which flags exist before building a prompt. Use `generate` to kick off a "
@@ -298,6 +302,47 @@ def _with_receipt(record: dict[str, Any]) -> dict[str, Any] | CallToolResult:
     )
 
 
+_VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".avi")
+
+
+def _with_images(record: dict[str, Any]) -> dict[str, Any] | CallToolResult:
+    """Embed output images as ImageContent for inline display in MCP clients.
+
+    Only fires for done generations with image URLs.  Videos are skipped
+    (no MCP ImageContent equivalent).  Degrades silently to URL-only on
+    fetch failure.
+    """
+    if str(record.get("processing_state", "")).lower() != "done":
+        return record
+
+    urls = [
+        u for u in (record.get("image_urls") or [])
+        if not any(u.split("?")[0].lower().endswith(ext) for ext in _VIDEO_EXTENSIONS)
+    ]
+    if not urls:
+        return record
+
+    images: list[ImageContent] = []
+    for url in urls:
+        result = fetch_image(url)
+        if result:
+            data, mime = result
+            images.append(ImageContent(
+                type="image",
+                data=base64.b64encode(data).decode(),
+                mimeType=mime,
+            ))
+
+    if not images:
+        return record
+
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(record, indent=2)), *images],
+        structuredContent=record,
+        isError=False,
+    )
+
+
 @mcp.tool()
 @_tool_errors
 def generate(prompt: str, callback_url: str | None = None, ctx: Context | None = None) -> dict[str, Any]:
@@ -308,9 +353,28 @@ def generate(prompt: str, callback_url: str | None = None, ctx: Context | None =
             E.g. ``"a fox in autumn foliage --ar 16:9 --flagship"``.
             Flags go at the END of the prompt. The ones people need most:
             ``--1`` / ``--2`` / ``--3`` / ``--4`` = how many images (default 4;
-            ``--1`` for a single image, cheapest), ``--ar 16:9`` = aspect ratio,
-            ``--v <model>`` = model. Anything else: call ``get_parameter(name)``
-            or ``search_parameters`` first — never guess a flag.
+            only specify if the user asks for a specific count),
+            ``--ar 16:9`` = aspect ratio, ``--v <model>`` = model. Anything
+            else: call ``get_parameter(name)`` or ``search_parameters``
+            first — never guess a flag.
+
+            **Image-to-image (img2img):** Place one or more public image URLs
+            in the prompt, followed by editing instructions:
+            ``"https://cdn.example.com/photo.webp reimagine as oil painting --ar 16:9"``
+            The engine extracts URLs automatically and switches to img2img mode.
+            Multiple URLs trigger multi-input mode (compositing/combining).
+            Use ``upload_image`` first if images aren't already hosted.
+
+            **Image-to-video:** Place an image URL in the prompt AND add
+            ``--mp4`` plus video flags (``--5sec``, ``--1080p``). Or use
+            ``execute_action`` with ``action_type="img2vid_basic"`` on a
+            completed generation's image.
+
+            **Style reference (--sref) is NOT img2img:** ``--sref <url>``
+            copies the visual *style* of a reference image (colors, mood,
+            composition) without using the image content as input. A bare URL
+            in the prompt edits the actual image; ``--sref`` transfers style.
+
         callback_url: Optional HTTPS URL that will receive a webhook when the
             generation reaches done / failed. See
             https://maginary.ai/blog/webhooks-guide for signature verification.
@@ -376,11 +440,19 @@ def get_generation(uuid: str, ctx: Context | None = None) -> dict[str, Any]:
         NOTE: a generation that failed server-side is a SUCCESSFUL tool call
         returning ``processing_state: "failed"`` — always check the state,
         never infer success from the absence of a tool error.
+
+        **Follow-up actions:** A completed generation's
+        ``processing_result.available_actions`` maps slot indices to valid
+        action types. E.g. ``{"0": ["upscale_2x", "vary_strong", ...],
+        "global": ["reroll"]}``. Use ``execute_action`` with the ``uuid``,
+        a chosen ``action_type``, and the ``parent_image_index`` (the slot
+        key as an int) to run an action.
+
         Hosted: a key obtained mid-session may be passed as
         ``_meta["maginary/api_key"]``.
     """
     with override_api_key(_request_meta(ctx).get(MCP_API_KEY_META_KEY)):
-        return api_get_generation(uuid)
+        return _with_images(api_get_generation(uuid))
 
 
 @mcp.tool()
@@ -405,9 +477,99 @@ def wait_for_generation(uuid: str, timeout_s: float = DEFAULT_WAIT_TIMEOUT_S,
         observed state — the generation keeps running server-side and can be
         re-fetched with ``get_generation`` later), ``"auth"``, or
         ``"failed"``.
+
+        **Follow-up actions:** A ``done`` generation's
+        ``processing_result.available_actions`` maps slot indices to valid
+        action types — e.g. ``{"0": ["upscale_2x", "vary_strong",
+        "pan_left", "zoom_out_2x", "img2vid_basic", ...], "global":
+        ["reroll"]}``. Use ``execute_action`` with the ``uuid``, a chosen
+        ``action_type``, and the ``parent_image_index`` (the slot key as an
+        int) to run an action on a specific output image.
     """
     with override_api_key(_request_meta(ctx).get(MCP_API_KEY_META_KEY)):
-        return api_wait_for_generation(uuid, timeout_s=timeout_s)
+        return _with_images(api_wait_for_generation(uuid, timeout_s=timeout_s))
+
+
+@mcp.tool()
+@_tool_errors
+def upload_image(image_base64: str, filename: str, ctx: Context | None = None) -> dict[str, Any]:
+    """Upload an image to get a public URL for use in img2img prompts.
+
+    Use this when the user's image isn't already at a public URL — the
+    engine needs a URL to fetch the image from.
+
+    Args:
+        image_base64: The image file contents, base64-encoded.  Accepts
+            PNG, JPEG, or WebP.
+        filename: Original filename (e.g. ``"photo.png"``).  Used for
+            Content-Disposition; the backend re-encodes to WebP regardless.
+
+    Returns:
+        Dict with ``url`` (the public CDN URL to use in a prompt or with
+        ``--sref``), ``exists`` (true if the same image was already
+        uploaded — deduplication by MD5), ``credits_deducted`` (upload
+        credits used), and ``message``.
+
+        On failure, an ``isError`` result — ``"auth"`` (no key),
+        ``"payment_required"`` (no upload credits; same x402 flow as
+        ``generate``), or ``"failed"``.
+    """
+    file_data = base64.b64decode(image_base64)
+    with override_api_key(_request_meta(ctx).get(MCP_API_KEY_META_KEY)):
+        return api_upload_image(file_data=file_data, filename=filename)
+
+
+@mcp.tool()
+@_tool_errors
+def execute_action(
+    generation_uuid: str,
+    action_type: str,
+    parent_image_index: int | None = None,
+    prompt: str | None = None,
+    callback_url: str | None = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """Run a follow-up action on a completed generation's image.
+
+    After ``generate`` → ``wait_for_generation``, the response's
+    ``processing_result.available_actions`` lists what's possible per slot.
+    Call this tool with one of those action types.
+
+    Args:
+        generation_uuid: UUID of the parent generation (from ``generate``).
+        action_type: One of the values from ``available_actions`` — e.g.
+            ``"upscale_2x"``, ``"upscale_1_5x"``, ``"vary_strong"``,
+            ``"vary_subtle"``, ``"pan_left"``, ``"pan_right"``,
+            ``"pan_up"``, ``"pan_down"``, ``"zoom_out_2x"``,
+            ``"zoom_out_1_5x"``, ``"img2vid_basic"``, ``"reroll"``.
+        parent_image_index: The slot index of the image to act on (0, 1,
+            2, or 3 for a 4-image grid). Required for per-slot actions;
+            omit for ``"reroll"`` (global action).
+        prompt: Optional replacement prompt. For ``vary_*`` you can steer
+            the variation with a new prompt; for ``img2vid_basic`` you can
+            describe the desired motion.
+        callback_url: Optional webhook URL (same as ``generate``).
+
+    Returns:
+        The newly created child generation record (same shape as
+        ``generate``'s return — poll it with ``wait_for_generation``).
+
+        On failure, same ``isError`` contract as ``generate``:
+        ``"auth"``, ``"payment_required"`` (with x402 challenge),
+        or ``"failed"``.
+    """
+    meta = _request_meta(ctx)
+    payment = meta.get(MCP_PAYMENT_META_KEY)
+    with override_api_key(meta.get(MCP_API_KEY_META_KEY)):
+        record = api_execute_action(
+            generation_uuid=generation_uuid,
+            action_type=action_type,
+            parent_image_index=parent_image_index,
+            prompt=prompt,
+            callback_url=callback_url,
+            payment=payment if isinstance(payment, dict) else None,
+        )
+    return _with_receipt(record)
 
 
 # ─── Onboarding tools (no API key required) ──────────────────────────────
