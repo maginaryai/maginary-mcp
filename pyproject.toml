@@ -1,6 +1,6 @@
 [project]
 name = "maginary-mcp"
-version = "0.3.2"
+version = "0.3.3"
 description = "Model Context Protocol server for Maginary — enumerate flags, kick off generations, poll results."
 readme = "README.md"
 requires-python = ">=3.10"
