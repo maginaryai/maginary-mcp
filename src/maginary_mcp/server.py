@@ -89,7 +89,15 @@ mcp = FastMCP(
         "which flags exist before building a prompt. Use `generate` to kick off a "
         "generation, then `wait_for_generation` (or a webhook callback) to fetch the "
         "resulting image / video URLs. Flags whose status is `dead`, `mostly-dead`, "
-        "or `unimplemented` should be avoided."
+        "or `unimplemented` should be avoided.\n\n"
+        "**Image editing (img2img):** `upload_image` takes raw base64 and returns "
+        "a CDN URL. Place that URL in the `generate` prompt with editing instructions "
+        "(e.g. `https://cdn.maginary.ai/…/photo.webp reimagine as watercolor`). "
+        "`--sref <url>` is style-only transfer, not img2img.\n\n"
+        "**Follow-up actions:** A completed generation's "
+        "`processing_result.available_actions` lists what's available (upscale, "
+        "vary, pan, zoom, img2vid, reroll). Use `execute_action` with the "
+        "`generation_uuid`, `action_type`, and `parent_image_index`."
     ),
 )
 
@@ -493,15 +501,15 @@ def wait_for_generation(uuid: str, timeout_s: float = DEFAULT_WAIT_TIMEOUT_S,
 @mcp.tool()
 @_tool_errors
 def upload_image(image_base64: str, filename: str, ctx: Context | None = None) -> dict[str, Any]:
-    """Upload an image to get a public URL for use in img2img prompts.
+    """Upload a local image and get a CDN URL for img2img or ``--sref``.
 
-    Use this when the user's image isn't already at a public URL — the
-    engine needs a URL to fetch the image from.
+    Base64-encode the file and call this tool.  Place the returned ``url``
+    in a ``generate`` prompt to edit the image:
+    ``generate("https://cdn.maginary.ai/…/photo.webp reimagine as oil painting")``
 
     Args:
-        image_base64: The image file contents, base64-encoded.  Accepts
-            PNG, JPEG, WebP, or HEIC/HEIF (auto-converted to JPEG;
-            requires ``pillow-heif``).
+        image_base64: The raw image file, base64-encoded.  Accepts PNG,
+            JPEG, WebP, or HEIC/HEIF (auto-converted server-side).
         filename: Original filename (e.g. ``"photo.png"``).  Used for
             Content-Disposition; the backend re-encodes to WebP regardless.
 

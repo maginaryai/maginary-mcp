@@ -202,7 +202,7 @@ list/search responses carry `source` (`live` vs `bundled-snapshot`).
 ### generation (auth required)
 
 - **`generate(prompt, callback_url?)`** — `POST /api/gens/`. Supports img2img: place image URLs in the prompt. Multiple URLs = multi-input compositing. Use `--sref <url>` for style-only transfer (not img2img).
-- **`upload_image(image_base64, filename)`** — `POST /api/images/upload/`. Returns a CDN URL for use in img2img prompts.
+- **`upload_image(image_base64, filename)`** — `POST /api/images/upload/`. Base64-encode a local image, get back a CDN URL for use in img2img prompts or `--sref`.
 - **`execute_action(generation_uuid, action_type, parent_image_index?, prompt?, callback_url?)`** — `POST /api/gens/{uuid}/actions/`. Run a follow-up on a completed generation's image (upscale, vary, pan, zoom, img2vid, reroll).
 - **`get_generation(uuid)`** — `GET /api/gens/{uuid}/`. Response includes `processing_result.available_actions` mapping slots to valid action types.
 - **`wait_for_generation(uuid, timeout_s=45)`** — poll to `done` / `failed`; a `timeout` result means still running — call again
