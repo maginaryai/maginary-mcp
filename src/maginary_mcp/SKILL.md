@@ -46,7 +46,7 @@ https://cdn.example.com/photo.webp reimagine as oil painting --ar 16:9
 
 The engine extracts URLs automatically and switches to img2img mode. Multiple URLs trigger multi-input mode (compositing/combining).
 
-**Local images:** `upload_image` takes raw base64 and returns a CDN URL. Place that URL in the prompt.
+**Local images (stdio only):** `upload_image(file_path=...)` reads the file from disk and returns a CDN URL. Not available on hosted/remote connections — provide a URL instead.
 
 **`--sref` is NOT img2img.** `--sref <url>` copies the visual *style* (colors, mood, composition) without using the image content as input. A bare URL in the prompt edits the actual image; `--sref` transfers style only.
 

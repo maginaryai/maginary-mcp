@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -90,10 +91,11 @@ mcp = FastMCP(
         "generation, then `wait_for_generation` (or a webhook callback) to fetch the "
         "resulting image / video URLs. Flags whose status is `dead`, `mostly-dead`, "
         "or `unimplemented` should be avoided.\n\n"
-        "**Image editing (img2img):** `upload_image` takes raw base64 and returns "
-        "a CDN URL. Place that URL in the `generate` prompt with editing instructions "
+        "**Image editing (img2img):** Place image URLs directly in the prompt "
         "(e.g. `https://cdn.maginary.ai/…/photo.webp reimagine as watercolor`). "
-        "`--sref <url>` is style-only transfer, not img2img.\n\n"
+        "If the user already has a URL, use it directly. On local (stdio) "
+        "connections, `upload_image(file_path=...)` reads a file from disk and "
+        "returns a CDN URL. `--sref <url>` is style-only, not img2img.\n\n"
         "**Follow-up actions:** A completed generation's "
         "`processing_result.available_actions` lists what's available (upscale, "
         "vary, pan, zoom, img2vid, reroll). Use `execute_action` with the "
@@ -498,34 +500,47 @@ def wait_for_generation(uuid: str, timeout_s: float = DEFAULT_WAIT_TIMEOUT_S,
         return _with_images(api_wait_for_generation(uuid, timeout_s=timeout_s))
 
 
+_IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"})
+
+
 @mcp.tool()
 @_tool_errors
-def upload_image(image_base64: str, filename: str, ctx: Context | None = None) -> dict[str, Any]:
+def upload_image(file_path: str, filename: str | None = None, ctx: Context | None = None) -> dict[str, Any]:
     """Upload a local image and get a CDN URL for img2img or ``--sref``.
 
-    Base64-encode the file and call this tool.  Place the returned ``url``
-    in a ``generate`` prompt to edit the image:
+    Only available on local (stdio) connections.  On hosted/remote
+    connections, place an existing image URL directly in the prompt.
+
+    Place the returned ``url`` in a ``generate`` prompt:
     ``generate("https://cdn.maginary.ai/…/photo.webp reimagine as oil painting")``
 
     Args:
-        image_base64: The raw image file, base64-encoded.  Accepts PNG,
-            JPEG, WebP, or HEIC/HEIF (auto-converted server-side).
-        filename: Original filename (e.g. ``"photo.png"``).  Used for
-            Content-Disposition; the backend re-encodes to WebP regardless.
+        file_path: Path to an image file on disk (JPEG, PNG, WebP, HEIC).
+        filename: Original filename.  Inferred from ``file_path`` if omitted.
 
     Returns:
-        Dict with ``url`` (the public CDN URL to use in a prompt or with
-        ``--sref``), ``exists`` (true if the same image was already
-        uploaded — deduplication by MD5), ``credits_deducted`` (upload
-        credits used), and ``message``.
-
-        On failure, an ``isError`` result — ``"auth"`` (no key),
-        ``"payment_required"`` (no upload credits; same x402 flow as
-        ``generate``), or ``"failed"``.
+        Dict with ``url`` (the public CDN URL), ``exists`` (deduplicated),
+        ``credits_deducted``, and ``message``.
     """
-    file_data = base64.b64decode(image_base64)
+    if is_hosted_mode():
+        return _error_result({
+            "error": "unsupported",
+            "message": (
+                "upload_image reads from the local filesystem and is only "
+                "available on stdio connections. Place an existing image URL "
+                "directly in the generate prompt, or upload via "
+                "POST /api/images/upload/ first."
+            ),
+        })
+    path = Path(file_path).resolve()
+    if path.suffix.lower() not in _IMAGE_EXTENSIONS:
+        return _error_result({
+            "error": "validation",
+            "message": f"Unsupported file type '{path.suffix}'. Accepted: {', '.join(sorted(_IMAGE_EXTENSIONS))}",
+        })
+    file_data = path.read_bytes()
     with override_api_key(_request_meta(ctx).get(MCP_API_KEY_META_KEY)):
-        return api_upload_image(file_data=file_data, filename=filename)
+        return api_upload_image(file_data=file_data, filename=filename or path.name)
 
 
 @mcp.tool()

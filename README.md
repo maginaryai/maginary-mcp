@@ -202,7 +202,7 @@ list/search responses carry `source` (`live` vs `bundled-snapshot`).
 ### generation (auth required)
 
 - **`generate(prompt, callback_url?)`** — `POST /api/gens/`. Supports img2img: place image URLs in the prompt. Multiple URLs = multi-input compositing. Use `--sref <url>` for style-only transfer (not img2img).
-- **`upload_image(image_base64, filename)`** — `POST /api/images/upload/`. Base64-encode a local image, get back a CDN URL for use in img2img prompts or `--sref`.
+- **`upload_image(file_path, filename?)`** — reads a local image file and uploads via `POST /api/images/upload/`. Returns a CDN URL for use in img2img prompts or `--sref`. Stdio connections only (hosted: use a URL directly or the REST endpoint).
 - **`execute_action(generation_uuid, action_type, parent_image_index?, prompt?, callback_url?)`** — `POST /api/gens/{uuid}/actions/`. Run a follow-up on a completed generation's image (upscale, vary, pan, zoom, img2vid, reroll).
 - **`get_generation(uuid)`** — `GET /api/gens/{uuid}/`. Response includes `processing_result.available_actions` mapping slots to valid action types.
 - **`wait_for_generation(uuid, timeout_s=45)`** — poll to `done` / `failed`; a `timeout` result means still running — call again
@@ -225,7 +225,7 @@ The LLM checks `processing_result.available_actions["0"]`, sees `"upscale_2x"`, 
 
 > "Edit this photo to look like a watercolor." *(user provides a local image)*
 
-The LLM calls `upload_image(base64_data, "photo.png")` → gets a CDN URL, then `generate("https://cdn.maginary.ai/…/photo.webp reimagine as watercolor painting")`.
+The LLM calls `upload_image("/tmp/photo.png")` → gets a CDN URL, then `generate("https://cdn.maginary.ai/…/photo.webp reimagine as watercolor painting")`. *(stdio only — on hosted, the user provides a URL instead.)*
 
 ## catalog freshness
 
