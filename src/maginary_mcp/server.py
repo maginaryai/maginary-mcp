@@ -412,9 +412,9 @@ def generate(prompt: str, callback_url: str | None = None, ctx: Context | None =
         client signs ``accepts[0]`` and calls this tool again with the payment
         in ``_meta["x402/payment"]``. The settled call returns the generation
         with ``x402_receipt`` (and ``_meta["x402/payment-response"]``); a
-        wallet's first settlement also returns ``x402_account`` with an API
-        key — pass it as ``_meta["maginary/api_key"]`` on later calls (or as
-        the Authorization header of a new connection).
+        wallet's first settlement creates its account. Subsequent requests
+        use wallet-signed auth headers (X-Wallet-Address/Signature/Timestamp)
+        or pass an API key as ``_meta["maginary/api_key"]``.
     """
     meta = _request_meta(ctx)
     payment = meta.get(MCP_PAYMENT_META_KEY)

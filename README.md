@@ -109,59 +109,34 @@ the same tool again with the payment in `_meta["x402/payment"]`. The server
 forwards it to the backend as `PAYMENT-SIGNATURE`; the backend verifies,
 settles on Base and, for a wallet with no account, creates one. The settled
 result carries the on-chain receipt in `_meta["x402/payment-response"]` and
-`x402_receipt`, and a first settlement returns `x402_account: {api_key,
-wallet}`. Pass that key as `_meta["maginary/api_key"]` on later calls
-(polling needs it), or open a new connection with it as the Bearer header.
+`x402_receipt`. No API key is returned — subsequent requests use wallet-signed
+auth headers (`X-Wallet-Address`, `X-Wallet-Signature`, `X-Wallet-Timestamp`)
+instead.
 The server holds no payment logic; everything is decided by the backend's
 `/api/gens/` contract.
 
-### lost the key? recover it, no new payment
+### wallet-signed authentication
 
-A key returned by `x402_account` is shown exactly once. If it's gone — the
-agent never persisted it, or a human never wrote it down — paying again from
-the *same* wallet does **not** hand back a second one: repeat payments just
-add credits to the account. That's deliberate (an unbounded stream of fresh
-keys from routine top-ups would be a bigger secret-exposure surface than
-losing one, and would remove any reason to persist a key at all), so
-recovery is a separate, explicit step: prove you hold the private key by
-signing a short message, and the backend reissues a key.
+After the first x402 payment creates the wallet's account, all subsequent
+requests are authenticated by signing a short message with the wallet's
+private key. Three headers on every request:
 
-```
-POST https://app.maginary.ai/api/auth/x402/recover-key/
-{
-  "address": "0xYourWalletAddress",
-  "timestamp": 1741000000,
-  "signature": "0x..."
-}
-```
+| Header | Value |
+|---|---|
+| `X-Wallet-Address` | Lowercased 0x EVM address (42 chars) |
+| `X-Wallet-Signature` | EIP-191 `personal_sign` hex over the challenge string |
+| `X-Wallet-Timestamp` | Unix seconds (integer) |
 
-`signature` is a standard `personal_sign` (EIP-191 — the same call MetaMask,
-ethers' `signer.signMessage(str)`, or `eth_account`'s `Account.sign_message`
-already expose) over the literal string:
+The challenge string is:
 
 ```
-Maginary: issue a new API key for <address> at <timestamp>. This does not move funds.
+Maginary: authenticate <address> at <timestamp>. This does not move funds.
 ```
 
 with `<address>` lowercased and `<timestamp>` the same unix seconds sent in
-the body. The timestamp must be within 5 minutes of the server's clock (30 s
-of future skew tolerated) — it's the only replay defense, so a stale or
-reused signature is rejected the same as a wrong one. A 200 revokes every
-existing key on the account and returns exactly one fresh one, in the body
-and in `X-Maginary-Api-Key` — same shape as `x402_account`, so code that
-already handles the first-payment response handles this response too.
-
-**This is a plain backend REST call, not an MCP tool** — deliberately, for
-the same reason the payment logic itself lives in the backend and not here:
-the server holds no identity logic of its own, and any agent that can
-already construct and sign the x402 payment above can construct and sign
-this one the same way. The one place this needs to be *discoverable* from
-inside an MCP session is the 402 itself: an anonymous `generate` call always
-comes back `payment_required` before the backend has any idea which wallet
-is asking, so its `error` text always names this endpoint alongside the
-payment instructions — an agent that gets stuck here learns about it from
-the exact same message it already parses to learn about paying in the first
-place, no separate discovery step.
+the header. The timestamp must be within 5 minutes of the server's clock
+(30 s of future skew tolerated). No API key management needed — the wallet
+*is* the credential.
 
 ```bash
 pip install "maginary-mcp[http]"

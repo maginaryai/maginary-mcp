@@ -178,12 +178,12 @@ class AuthGateMiddleware:
 
 
 def _no_bearer_description() -> str:
-    """The gate cannot see a wallet, so a keyless x402 agent is told the one
-    HTTP call that turns its first payment into a key it can send as Bearer."""
+    """The gate cannot see a wallet, so a keyless x402 agent is told how to
+    get started with the payment-is-the-signup path."""
     public_host = os.environ.get("MAGINARY_PUBLIC_HOST", "app.maginary.ai")
     return ("Authentication required: send an API key or OAuth access token as Bearer. "
             f"Wallet-only agents: one x402-paid POST to https://{public_host}/api/gens/ "
-            "returns an API key in X-Maginary-Api-Key.")
+            "creates your account; use X-Wallet-Address/Signature/Timestamp headers after.")
 
 
 async def _send_401(send, description: str, error: str | None = None) -> None:

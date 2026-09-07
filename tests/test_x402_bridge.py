@@ -5,8 +5,8 @@ The x402 SDK's MCP client (`x402/mcp/client.py`) detects a payable result by
 the SAME tool with the payment in ``_meta["x402/payment"]``; the receipt is
 read from ``_meta["x402/payment-response"]``. The MCP holds no payment logic:
 it forwards the payment as PAYMENT-SIGNATURE and echoes the backend's
-PAYMENT-RESPONSE. ``_meta["maginary/api_key"]`` is our carrier for a key
-obtained mid-session (keyless x402 returns one on the first settlement).
+PAYMENT-RESPONSE. ``_meta["maginary/api_key"]`` is still accepted as an
+optional carrier for API keys obtained via the dashboard.
 """
 import asyncio
 import base64
@@ -33,8 +33,7 @@ CHALLENGE = {
 PAYMENT = {"x402Version": 2, "scheme": "exact", "network": "eip155:8453",
            "payload": {"signature": "0xsig", "authorization": {"from": "0xd802", "value": "70000", "nonce": "n1"}}}
 RECEIPT = {"success": True, "transaction": "0xtx1", "network": "eip155:8453", "payer": "0xd802"}
-GEN = {"uuid": "c04dccce0517c46d68b46d2f0a1a5670", "processing_state": "queued",
-       "x402_account": {"api_key": "k-new", "wallet": "0xd802"}}
+GEN = {"uuid": "c04dccce0517c46d68b46d2f0a1a5670", "processing_state": "queued"}
 
 
 @pytest.fixture(autouse=True)
@@ -116,7 +115,6 @@ class TestPaymentRetry:
         assert result.meta[server.MCP_PAYMENT_RESPONSE_META_KEY] == RECEIPT
         assert result.structuredContent["x402_receipt"] == RECEIPT
         assert result.structuredContent["uuid"] == GEN["uuid"]
-        assert result.structuredContent["x402_account"]["api_key"] == "k-new"
 
     def test_no_meta_means_no_payment_header_and_plain_record(self, posts):
         posts.respond(lambda: httpx.Response(201, json={"uuid": "u", "processing_state": "queued"}))
