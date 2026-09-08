@@ -267,6 +267,24 @@ def _headers() -> dict[str, str]:
     return {**_bearer_headers(), **(_request_forwarded.get() or {})}
 
 
+def _headers_anonymous_ok() -> dict[str, str]:
+    """Like _headers() but falls back to no-auth in hosted mode.
+
+    For endpoints where the backend accepts anonymous requests (e.g.
+    POST /gens/ returns 402 for anonymous, GET /gens/{uuid}/ is public).
+    In stdio mode, behaves identically to _headers() — there's always a
+    configured key or the env var.
+    """
+    base = {"Content-Type": "application/json", "Accept": "application/json"}
+    if is_hosted_mode():
+        bound = _request_api_key.get()
+        if bound:
+            base["Authorization"] = f"Bearer {bound}"
+        base.update(_request_forwarded.get() or {})
+        return base
+    return _headers()
+
+
 def _raise_for_status(resp: httpx.Response) -> None:
     """Like ``resp.raise_for_status`` but maps 401 to :class:`AuthError`.
 
@@ -304,6 +322,24 @@ def register_account(email: str) -> dict[str, Any]:
             return soft_error("rate_limited", "Too many registration attempts. Try again later.")
         if resp.status_code == 400:
             return soft_error("validation", _body_detail(resp) or "Invalid request")
+        _raise_for_status(resp)
+        return resp.json()
+
+
+def create_wallet_account(address: str, signature: str, timestamp: int) -> dict[str, Any]:
+    """POST /auth/wallet-account/ — create account from wallet signature."""
+    with _client() as client:
+        resp = client.post(
+            f"{_base_url()}/auth/wallet-account/",
+            json={"address": address, "signature": signature, "timestamp": timestamp},
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+        if resp.status_code == 400:
+            return soft_error("validation", _body_detail(resp) or "Invalid request")
+        if resp.status_code == 403:
+            return soft_error("signature_failed", _body_detail(resp) or "Signature invalid or expired")
+        if resp.status_code == 429:
+            return soft_error("rate_limited", "Too many attempts. Try again later.")
         _raise_for_status(resp)
         return resp.json()
 
@@ -421,7 +457,7 @@ def create_generation(
     body: dict[str, Any] = {"prompt": prompt}
     if callback_url:
         body["callback_url"] = callback_url
-    headers = _headers()
+    headers = _headers_anonymous_ok()
     if payment:
         headers[PAYMENT_SIGNATURE_HEADER] = base64.b64encode(json.dumps(payment).encode()).decode()
 
@@ -681,9 +717,9 @@ def fetch_image(url: str, timeout: float = 15.0) -> tuple[bytes, str] | None:
 
 
 def get_generation(uuid: str) -> dict[str, Any]:
-    """GET /gens/{uuid}/ — poll a specific generation."""
+    """GET /gens/{uuid}/ — poll a specific generation (public by UUID)."""
     with _client() as client:
-        resp = client.get(f"{_base_url()}/gens/{uuid}/", headers=_headers())
+        resp = client.get(f"{_base_url()}/gens/{uuid}/", headers=_headers_anonymous_ok())
         _raise_for_status(resp)
         return resp.json()
 

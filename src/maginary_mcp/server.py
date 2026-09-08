@@ -42,6 +42,7 @@ from .api import (
     upload_image as api_upload_image,
     wait_for_generation as api_wait_for_generation,
     register_account,
+    create_wallet_account as api_create_wallet_account,
     get_account_status,
     create_api_key as api_create_api_key,
     list_api_keys as api_list_api_keys,
@@ -622,6 +623,43 @@ def create_account(email: str) -> dict[str, Any]:
         ``"rate_limited"``, or ``"failed"``.
     """
     return _as_result(register_account(email))
+
+
+@mcp.tool()
+@_tool_errors
+def create_wallet_account(
+    address: str,
+    signature: str,
+    timestamp: int,
+) -> dict[str, Any]:
+    """Create (or access) a Maginary account using a wallet signature.
+
+    Sign the message ``Maginary: authenticate <address> at <timestamp>.
+    This does not move funds.`` with EIP-191 ``personal_sign`` and pass all
+    three values. On success, an API key is returned immediately — no email
+    verification needed.
+
+    Use this when you have a wallet but no email. The returned ``api_key``
+    should be passed as ``Authorization: Bearer <key>`` in the MCP client
+    config, or via ``configure_api_key`` (stdio) / ``_meta["maginary/api_key"]``
+    (hosted, per-call).
+
+    If the wallet already has an account, returns the existing account with
+    a fresh API key.
+
+    Args:
+        address: EVM wallet address (0x..., 42 chars).
+        signature: Hex-encoded EIP-191 personal_sign of the auth message.
+        timestamp: Unix epoch seconds used in the signed message (must be
+            within the last 5 minutes).
+
+    Returns:
+        Dict with ``address``, ``api_key`` (full key — show once),
+        ``key_prefix``, ``created`` (bool), ``message``.
+        On failure: ``isError`` with ``error`` = ``"validation"``,
+        ``"signature_failed"``, or ``"rate_limited"``.
+    """
+    return _as_result(api_create_wallet_account(address, signature, timestamp))
 
 
 @mcp.tool()
