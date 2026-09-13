@@ -4,6 +4,10 @@
 
 Model Context Protocol server for [Maginary](https://maginary.ai) — enumerate the prompt-DSL flags the engine accepts, kick off generations, and poll for results, all from inside your MCP-compatible client (Claude Desktop, Cursor, Continue, custom).
 
+<!-- mcp-name: io.github.maginaryai/maginary-mcp -->
+<!-- The line above is how the official MCP Registry verifies this PyPI package belongs to the server
+     named in server.json. It must match server.json "name" exactly. Keep it in the README (= PyPI long description). -->
+
 ## why
 
 Maginary uses a Midjourney-style `--flag` prompt DSL over an async HTTP API. This server:
