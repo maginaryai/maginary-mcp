@@ -86,11 +86,21 @@ mcp = FastMCP(
         "`manage_api_key(action='create')` → `configure_api_key` → "
         "`get_products` → `checkout`. The $10 novice_pack is the recommended "
         "starting point. API key creation and checkout require a verified email.\n\n"
-        "**Prompt DSL essentials:** flags go at the END of the prompt. `--1` `--2` "
-        "`--3` `--4` = number of images (default 4; only specify if the user asks "
-        "for a specific count), `--ar 16:9` = aspect ratio, `--v <model>` = model. "
-        "If the user names a flag you don't know, call `get_parameter(name)` — "
-        "never guess or drop it.\n\n"
+        "**Prompt rules (IMPORTANT):** Pass the user's words as-is. Do NOT add "
+        "flags the user did not ask for — no ``--ar``, no ``--flagship``, no model "
+        "flags, nothing. Flags cost money; adding them without asking is a "
+        "UX failure. Before the FIRST generation in a conversation, briefly mention "
+        "the quality option once: standard (default, cheap) or flagship (best, ~4× "
+        "more expensive) — then generate with whatever they choose, or standard if "
+        "they don't care. After that, never ask again unless they bring it up. "
+        "Do NOT ask about aspect ratio — omit ``--ar`` by default; square format "
+        "gives the most diversity and is the best starting point. Only add ``--ar`` "
+        "when the user explicitly mentions landscape, portrait, widescreen, etc. "
+        "Flags go at the END of the prompt. ``--1``/``--2``/``--3``/``--4`` = "
+        "image count (default 4; only if user specifies). ``--ar 16:9`` = aspect "
+        "ratio (only if user explicitly asks). ``--flagship`` = best quality (only if "
+        "user explicitly wants it). Unknown flag: call ``get_parameter(name)`` — "
+        "never guess.\n\n"
         f"**Every flag that exists, and its state:** {_DSL_MAP}\n\n"
         "**Existing users:** Use `search_parameters` / `get_parameter` to discover "
         "which flags exist before building a prompt. Use `generate` to kick off a "
@@ -370,14 +380,24 @@ def generate(prompt: str, callback_url: str | None = None, ctx: Context | None =
     """Kick off a generation via POST /api/gens/.
 
     Args:
-        prompt: The full prompt string, including any ``--flag`` parameters.
-            E.g. ``"a fox in autumn foliage --ar 16:9 --flagship"``.
-            Flags go at the END of the prompt. The ones people need most:
-            ``--1`` / ``--2`` / ``--3`` / ``--4`` = how many images (default 4;
-            only specify if the user asks for a specific count),
-            ``--ar 16:9`` = aspect ratio, ``--v <model>`` = model. Anything
-            else: call ``get_parameter(name)`` or ``search_parameters``
-            first — never guess a flag.
+        prompt: The user's words, passed through as-is. Do NOT add flags the
+            user did not ask for — no ``--ar``, no ``--flagship``, no model
+            flags. Every extra flag costs credits; adding them unrequested is
+            wrong. Standard quality is the default and is cheap; ``--flagship``
+            is ~4× more expensive and must only be used when the user
+            explicitly asks for best quality.
+
+            If the user asks about quality or aspect ratio: ask them first
+            (standard vs flagship, landscape vs portrait) before generating.
+
+            Flags go at the END, only when the user asked:
+            ``--1``/``--2``/``--3``/``--4`` = image count (default 4),
+            ``--ar 16:9`` = aspect ratio, ``--flagship`` = best quality.
+            Unknown flag: call ``get_parameter(name)`` first — never guess.
+
+            Examples — user says "a fox": prompt is ``"a fox"``.
+            User says "a fox, landscape, best quality":
+            prompt is ``"a fox --ar 16:9 --flagship"``.
 
             **Image-to-image (img2img):** Place one or more public image URLs
             in the prompt, followed by editing instructions:
