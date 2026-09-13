@@ -233,7 +233,8 @@ class TestStructuralClassification:
         assert set(result.structuredContent) == {"error", "message"}
 
     def test_non_json_402_has_no_phantom_challenge(self, monkeypatch):
-        # An empty dict reads as a settleable x402 challenge; must be None.
+        # A non-JSON 402 must not produce a top-level `accepts` (which an x402
+        # client would mistake for a settleable challenge).
         monkeypatch.setenv("MAGINARY_API_KEY", "sk-mag-test")
 
         def fake_post(self, url, **kw):
@@ -242,4 +243,22 @@ class TestStructuralClassification:
 
         monkeypatch.setattr(httpx.Client, "post", fake_post)
         result = generate("a fox")
-        assert result.structuredContent["challenge"] is None
+        assert "accepts" not in result.structuredContent
+
+    def test_demo_404_surfaces_available_prompts(self, monkeypatch):
+        monkeypatch.setenv("MAGINARY_API_KEY", "sk-mag-test")
+        demos = ["frog", "dog playing with water --2"]
+
+        def fake_post(self, url, **kw):
+            return httpx.Response(404, json={
+                "error": "demo prompt not found",
+                "code": "DEMO_PROMPT_NOT_FOUND",
+                "available_demos": demos,
+            }, request=httpx.Request("POST", url))
+
+        monkeypatch.setattr(httpx.Client, "post", fake_post)
+        result = generate("a horse --demo")
+        assert isinstance(result, CallToolResult)
+        assert result.isError is True
+        assert result.structuredContent["error"] == "demo_not_found"
+        assert result.structuredContent["available_demos"] == demos

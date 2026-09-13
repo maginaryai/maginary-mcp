@@ -253,13 +253,27 @@ def _bearer_headers(api_key: str | None = None) -> dict[str, str]:
     }
 
 
+def _noauth_headers() -> dict[str, str]:
+    """JSON request headers with no auth — for public endpoints (register, products).
+
+    Includes ``X-Forwarded-*`` in hosted mode so the backend's
+    ``SECURE_SSL_REDIRECT`` sees HTTPS and doesn't 301 to a TLS-less port.
+    """
+    return {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        **(_request_forwarded.get() or {}),
+    }
+
+
 def _basic_headers(email: str, password: str) -> dict[str, str]:
-    """Build headers with HTTP Basic auth."""
+    """Build headers with HTTP Basic auth (includes forwarded headers)."""
     creds = base64.b64encode(f"{email}:{password}".encode()).decode()
     return {
         "Authorization": f"Basic {creds}",
         "Content-Type": "application/json",
         "Accept": "application/json",
+        **(_request_forwarded.get() or {}),
     }
 
 
@@ -314,7 +328,7 @@ def register_account(email: str) -> dict[str, Any]:
         resp = client.post(
             f"{_base_url()}/auth/register/",
             json={"email": email},
-            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            headers=_noauth_headers(),
         )
         if resp.status_code == 409:
             return soft_error("already_exists", _body_detail(resp) or "Account exists")
@@ -332,7 +346,7 @@ def create_wallet_account(address: str, signature: str, timestamp: int) -> dict[
         resp = client.post(
             f"{_base_url()}/auth/wallet-account/",
             json={"address": address, "signature": signature, "timestamp": timestamp},
-            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            headers=_noauth_headers(),
         )
         if resp.status_code == 400:
             return soft_error("validation", _body_detail(resp) or "Invalid request")
@@ -407,7 +421,7 @@ def list_products() -> list[dict[str, Any]]:
     with _client() as client:
         resp = client.get(
             f"{_base_url()}/products/",
-            headers={"Accept": "application/json"},
+            headers=_noauth_headers(),
         )
         _raise_for_status(resp)
         return resp.json()
@@ -463,6 +477,16 @@ def create_generation(
 
     with _client() as client:
         resp = client.post(f"{_base_url()}/gens/", headers=headers, json=body)
+        if resp.status_code == 404:
+            # --demo with an unknown prompt: surface available_demos so the
+            # agent can retry with a valid one instead of guessing.
+            data = _parsed_body(resp)
+            if data and "available_demos" in data:
+                return SoftError({
+                    "error": "demo_not_found",
+                    "message": _detail_from_data(data) or "No matching demo",
+                    "available_demos": data["available_demos"],
+                })
         if resp.status_code == 402:
             # Guarded like every other error body: a proxy's non-JSON 402
             # must still classify as payment_required, not generic "failed".

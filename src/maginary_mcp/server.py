@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mcp.types import ToolAnnotations
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import CallToolResult, ImageContent, TextContent
 
@@ -75,12 +76,16 @@ mcp = FastMCP(
     instructions=(
         "Maginary is a Midjourney-style AI image + video generator with a `--flag` "
         "prompt DSL and an async HTTP API.\n\n"
-        "**New users (no API key yet):** Use `create_account` → wait for email "
-        "verification (poll with `check_account_status` — MUST be verified before "
-        "proceeding) → `manage_api_key(action='create')` → `configure_api_key` → "
-        "`get_products` → `checkout` (or just `generate` if you have a USDC wallet "
-        "— x402 handles payment on-chain). The $10 novice_pack is the recommended "
-        "starting point. API key creation and checkout both require a verified email.\n\n"
+        "**New users (no API key yet) — pick the shortest path:**\n"
+        "- **USDC wallet (fastest):** Just call `generate` with your prompt. "
+        "The 402 response prices the generation; settle it on-chain (x402, USDC "
+        "on Base) and your account is created automatically.\n"
+        "- **Wallet auth (no email):** `create_wallet_account` → returns an API "
+        "key immediately, no email verification.\n"
+        "- **Email:** `create_account` → user clicks verification email → "
+        "`manage_api_key(action='create')` → `configure_api_key` → "
+        "`get_products` → `checkout`. The $10 novice_pack is the recommended "
+        "starting point. API key creation and checkout require a verified email.\n\n"
         "**Prompt DSL essentials:** flags go at the END of the prompt. `--1` `--2` "
         "`--3` `--4` = number of images (default 4; only specify if the user asks "
         "for a specific count), `--ar 16:9` = aspect ratio, `--v <model>` = model. "
@@ -108,7 +113,15 @@ mcp = FastMCP(
 # ─── Read-only catalog tools ──────────────────────────────────────────────
 
 
-@mcp.tool()
+def _ann(*, read_only: bool = False, destructive: bool = False, idempotent: bool = False,
+         open_world: bool = True) -> ToolAnnotations:
+    """Tool annotations (MCP spec). Clients use them for auto-approval: read-only
+    tools run without a per-call prompt; destructive ones always prompt."""
+    return ToolAnnotations(readOnlyHint=read_only, destructiveHint=destructive,
+                           idempotentHint=idempotent, openWorldHint=open_world)
+
+
+@mcp.tool(title="List parameters", annotations=_ann(read_only=True, idempotent=True, open_world=False))
 def list_parameters(
     category: str | None = None,
     status: str | None = None,
@@ -146,7 +159,7 @@ def list_parameters(
     }
 
 
-@mcp.tool()
+@mcp.tool(title="Search parameters", annotations=_ann(read_only=True, idempotent=True, open_world=False))
 def search_parameters(
     query: str,
     category: str | None = None,
@@ -175,7 +188,7 @@ def search_parameters(
     }
 
 
-@mcp.tool()
+@mcp.tool(title="Get parameter", annotations=_ann(read_only=True, idempotent=True, open_world=False))
 def get_parameter(name: str) -> dict[str, Any]:
     """Return the full record for a single parameter (canonical name or alias).
 
@@ -232,20 +245,15 @@ def _tool_errors(fn):
         except AuthError as exc:
             return _error_result({"error": "auth", "message": safe_error_message(exc)})
         except PaymentRequiredError as exc:
-            # The backend's x402 PaymentRequired is merged at the TOP level
-            # (x402Version, accepts, resource, extensions): the x402 SDK's MCP
-            # client detects a payable result by `isError` + top-level
-            # `accepts`, then re-calls this tool with the signed payment in
-            # `_meta["x402/payment"]`. Our failure-contract fields come after
-            # so `error` stays the discriminator (the x402 human text is in
-            # `message`). `challenge` is kept for one release (deprecated
-            # duplicate).
+            # x402 fields (x402Version, accepts, resource, extensions) are
+            # spread at top level so the x402 SDK's MCP client detects a
+            # payable result by `isError` + top-level `accepts` and re-calls
+            # this tool with the signed payment in `_meta["x402/payment"]`.
             return _error_result({
                 **(exc.challenge or {}),
                 "error": "payment_required",
                 "message": f"{exc} — or pay via x402 (USDC on Base).",
                 "billing_url": exc.billing_url or "https://app.maginary.ai/dashboard",
-                "challenge": exc.challenge,
             })
         except TimeoutError as exc:
             return _error_result({"error": "timeout", "message": safe_error_message(exc)})
@@ -302,6 +310,8 @@ def _request_meta(ctx: Context | None) -> dict[str, Any]:
 def _with_receipt(record: dict[str, Any]) -> dict[str, Any] | CallToolResult:
     """A settled generation carries its on-chain receipt in `_meta` (SDK) and
     in `structuredContent.x402_receipt` (clients that ignore meta)."""
+    if isinstance(record, SoftError):
+        return _error_result(dict(record))
     receipt = record.get("x402_receipt")
     if not receipt:
         return record
@@ -354,7 +364,7 @@ def _with_images(record: dict[str, Any]) -> dict[str, Any] | CallToolResult:
     )
 
 
-@mcp.tool()
+@mcp.tool(title="Generate image or video", annotations=_ann(idempotent=False))
 @_tool_errors
 def generate(prompt: str, callback_url: str | None = None, ctx: Context | None = None) -> dict[str, Any]:
     """Kick off a generation via POST /api/gens/.
@@ -401,10 +411,12 @@ def generate(prompt: str, callback_url: str | None = None, ctx: Context | None =
         - ``"auth"`` — no/invalid API key. Surface the message directly to
           the human.
         - ``"payment_required"`` — out of credits. The body carries
-          ``billing_url`` and ``challenge``: either send the human to
-          ``billing_url`` to top up, or pay programmatically via x402 —
-          ``challenge`` is the standard x402 payment-required payload (USDC
-          on Base); settle it and retry this call.
+          ``billing_url`` and top-level x402 fields (``accepts``,
+          ``resource``): either send the human to ``billing_url`` to top up,
+          or pay programmatically via x402 (settle ``accepts[0]`` with USDC
+          on Base and retry).
+        - ``"demo_not_found"`` — ``--demo`` prompt has no matching seeded
+          generation. ``available_demos`` lists valid prompts.
         - ``"failed"`` — anything else (invalid prompt, rate limit, backend
           or network error); see ``message``.
 
@@ -437,7 +449,7 @@ def _append_dsl_map_to_tool(name: str) -> None:
 _append_dsl_map_to_tool("generate")
 
 
-@mcp.tool()
+@mcp.tool(title="Get generation", annotations=_ann(read_only=True, idempotent=True))
 @_tool_errors
 def get_generation(uuid: str, ctx: Context | None = None) -> dict[str, Any]:
     """Fetch a generation by UUID (GET /api/gens/{uuid}/).
@@ -466,7 +478,7 @@ def get_generation(uuid: str, ctx: Context | None = None) -> dict[str, Any]:
         return _with_images(api_get_generation(uuid))
 
 
-@mcp.tool()
+@mcp.tool(title="Wait for generation", annotations=_ann(read_only=True, idempotent=True))
 @_tool_errors
 def wait_for_generation(uuid: str, timeout_s: float = DEFAULT_WAIT_TIMEOUT_S,
                         ctx: Context | None = None) -> dict[str, Any]:
@@ -504,7 +516,7 @@ def wait_for_generation(uuid: str, timeout_s: float = DEFAULT_WAIT_TIMEOUT_S,
 _IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"})
 
 
-@mcp.tool()
+@mcp.tool(title="Upload image", annotations=_ann(idempotent=True))
 @_tool_errors
 def upload_image(file_path: str, filename: str | None = None, ctx: Context | None = None) -> dict[str, Any]:
     """Upload a local image and get a CDN URL for img2img or ``--sref``.
@@ -544,7 +556,7 @@ def upload_image(file_path: str, filename: str | None = None, ctx: Context | Non
         return api_upload_image(file_data=file_data, filename=filename or path.name)
 
 
-@mcp.tool()
+@mcp.tool(title="Run action on image", annotations=_ann(idempotent=False))
 @_tool_errors
 def execute_action(
     generation_uuid: str,
@@ -600,7 +612,7 @@ def execute_action(
 # ─── Onboarding tools (no API key required) ──────────────────────────────
 
 
-@mcp.tool()
+@mcp.tool(title="Create account", annotations=_ann(idempotent=False))
 @_tool_errors
 def create_account(email: str) -> dict[str, Any]:
     """Create a new Maginary account for the given email address.
@@ -625,7 +637,7 @@ def create_account(email: str) -> dict[str, Any]:
     return _as_result(register_account(email))
 
 
-@mcp.tool()
+@mcp.tool(title="Create wallet account", annotations=_ann(destructive=True, idempotent=False))
 @_tool_errors
 def create_wallet_account(
     address: str,
@@ -662,7 +674,7 @@ def create_wallet_account(
     return _as_result(api_create_wallet_account(address, signature, timestamp))
 
 
-@mcp.tool()
+@mcp.tool(title="Check account status", annotations=_ann(read_only=True, idempotent=True))
 @_tool_errors
 def check_account_status(
     email: str | None = None,
@@ -688,7 +700,7 @@ def check_account_status(
 # ─── API key management tools ───────────────────────────────────────────
 
 
-@mcp.tool()
+@mcp.tool(title="Manage API key", annotations=_ann(destructive=True, idempotent=False))
 @_tool_errors
 def manage_api_key(
     action: str,
@@ -728,7 +740,7 @@ def manage_api_key(
     return _error_result({"error": "validation", "message": f"Unknown action {action!r}. Use create/list/revoke."})
 
 
-@mcp.tool()
+@mcp.tool(title="Configure API key", annotations=_ann(idempotent=True, open_world=False))
 @_tool_errors
 def configure_api_key(api_key: str) -> dict[str, Any]:
     """Activate an API key. Local (stdio) servers persist it; hosted does not.
@@ -774,7 +786,7 @@ def configure_api_key(api_key: str) -> dict[str, Any]:
 # ─── Payment tools ───────────────────────────────────────────────────────
 
 
-@mcp.tool()
+@mcp.tool(title="Get products", annotations=_ann(read_only=True, idempotent=True))
 @_tool_errors
 def get_products() -> dict[str, Any]:
     """List available Maginary products/plans with pricing.
@@ -794,7 +806,7 @@ def get_products() -> dict[str, Any]:
     return {"count": len(products), "products": products}
 
 
-@mcp.tool()
+@mcp.tool(title="Create checkout link", annotations=_ann(idempotent=False))
 @_tool_errors
 def checkout(
     product_id: int,
@@ -823,7 +835,7 @@ def checkout(
     return _as_result(api_create_checkout(product_id, email, password))
 
 
-@mcp.tool()
+@mcp.tool(title="Get balance", annotations=_ann(read_only=True, idempotent=True))
 @_tool_errors
 def get_balance(
     email: str | None = None,

@@ -1,25 +1,27 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.maginaryai/maginary-mcp",
-  "description": "Midjourney-style AI image + video generation with a --flag prompt DSL. Enumerate flags, kick off generations, poll for results.",
+  "description": "AI image + video generation for agents: --flag prompt DSL, async generate/poll, x402 pay-per-use.",
   "version": "0.3.7",
   "repository": {
     "url": "https://github.com/maginaryai/maginary-mcp",
     "source": "github"
   },
-  "websiteUrl": "https://maginary.ai",
+  "websiteUrl": "https://maginary.ai/mcp",
   "packages": [
     {
       "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
       "identifier": "maginary-mcp",
       "version": "0.3.7",
+      "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "MAGINARY_API_KEY",
-          "description": "Bearer token from https://app.maginary.ai/dashboard#api-keys. Required for generate/get_generation/wait_for_generation; catalog tools work without it.",
+          "description": "Bearer token from https://app.maginary.ai/dashboard#api-keys. Optional: without it the server offers in-chat signup (create_account) or wallet signup (create_wallet_account); catalog tools always work.",
           "isSecret": true,
           "isRequired": false
         }

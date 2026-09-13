@@ -105,6 +105,47 @@ def protected_resource_metadata() -> dict:
     }
 
 
+async def server_card() -> dict:
+    """The server card served at /.well-known/mcp/server-card.json.
+
+    Same facts as the human page and tools/list, in the shape directory
+    scanners expect: identity, transport, auth posture, live tool list.
+    """
+    from . import __version__
+    from .server import mcp
+
+    tools = await mcp.list_tools()
+    return {
+        "name": "maginary",
+        "description": mcp.instructions.split("\n", 1)[0] if mcp.instructions else "",
+        "version": __version__,
+        "serverInfo": {"name": "maginary", "version": __version__},
+        "url": resource_url(),
+        "transport": "streamable-http",
+        "authentication": {
+            "required": auth_required(),
+            "schemes": ["oauth2", "bearer"],
+            "resource_metadata": _resource_metadata_url(),
+        },
+        "capabilities": {"tools": True, "resources": False, "prompts": False},
+        "tools": [
+            {
+                "name": t.name,
+                "title": t.title,
+                "description": t.description or "",
+                "inputSchema": t.inputSchema,
+                "annotations": t.annotations.model_dump(exclude_none=True) if t.annotations else None,
+            }
+            for t in tools
+        ],
+        "resources": [],
+        "prompts": [],
+        "websiteUrl": "https://maginary.ai/mcp",
+        "documentationUrl": "https://maginary.ai/docs",
+        "repository": "https://github.com/maginaryai/maginary-mcp",
+    }
+
+
 def _resource_metadata_url() -> str:
     from urllib.parse import urlparse
     p = urlparse(resource_url())
@@ -265,8 +306,15 @@ def build_app():
         # log in; it then reads RFC 8414 metadata at that issuer.
         return JSONResponse(protected_resource_metadata())
 
+    async def _server_card(request: Request) -> JSONResponse:
+        # MCP server card (SEP-2127 shape). Directories that scan a bare URL
+        # (Smithery, agent crawlers) read this instead of speaking JSON-RPC.
+        # Tools are listed live so the card can never drift from tools/list.
+        return JSONResponse(await server_card(), headers={"Cache-Control": "public, max-age=300"})
+
     # /health stays route 0 (pinned by a test: it must never sit behind the
     # MCP transport); the metadata documents go right after it.
+    app.routes.insert(0, Route("/.well-known/mcp/server-card.json", _server_card))
     app.routes.insert(0, Route("/.well-known/oauth-protected-resource/{rest:path}",
                                _protected_resource_metadata))
     app.routes.insert(0, Route("/.well-known/oauth-protected-resource", _protected_resource_metadata))

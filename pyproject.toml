@@ -36,7 +36,7 @@ test = ["pytest>=8", "x402>=2.20.0"]
 [project.urls]
 Homepage = "https://maginary.ai"
 Documentation = "https://maginary.ai/docs"
-Repository = "https://github.com/maginaryai/maginary-mcp"  # not created yet — see DISTRIBUTION-DIRECTORIES.md Tier 0 #4
+Repository = "https://github.com/maginaryai/maginary-mcp"
 "Parameters JSON" = "https://maginary.ai/docs/parameters.json"
 
 [project.scripts]

@@ -74,6 +74,37 @@ def test_forwarded_resets_after_request():
     assert api._request_forwarded.get() is None
 
 
+def test_noauth_headers_carry_forwarded_in_hosted_mode():
+    fwd = {"X-Forwarded-Proto": "https", "X-Forwarded-For": "1.2.3.4"}
+    with api.request_api_key(None, forwarded=fwd):
+        headers = api._noauth_headers()
+    assert "Authorization" not in headers
+    assert headers["X-Forwarded-Proto"] == "https"
+    assert headers["X-Forwarded-For"] == "1.2.3.4"
+
+
+def test_noauth_headers_no_forwarded_in_stdio(monkeypatch):
+    monkeypatch.setenv("MAGINARY_API_KEY", "env-key")
+    headers = api._noauth_headers()
+    assert "X-Forwarded-Proto" not in headers
+    assert "Authorization" not in headers
+
+
+def test_basic_headers_carry_forwarded_in_hosted_mode():
+    fwd = {"X-Forwarded-Proto": "https", "X-Forwarded-For": "10.0.0.1"}
+    with api.request_api_key(None, forwarded=fwd):
+        headers = api._basic_headers("a@b.c", "pw")
+    assert headers["Authorization"].startswith("Basic ")
+    assert headers["X-Forwarded-Proto"] == "https"
+    assert headers["X-Forwarded-For"] == "10.0.0.1"
+
+
+def test_basic_headers_no_forwarded_in_stdio():
+    headers = api._basic_headers("a@b.c", "pw")
+    assert headers["Authorization"].startswith("Basic ")
+    assert "X-Forwarded-Proto" not in headers
+
+
 def test_middleware_binds_forwarded_for_the_inner_app():
     seen = {}
 

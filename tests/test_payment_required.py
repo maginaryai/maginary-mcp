@@ -66,7 +66,9 @@ class TestGenerateToolPaymentRequired:
         assert result.isError is True
         assert result.structuredContent["error"] == "payment_required"
         assert result.structuredContent["billing_url"] == "https://app.maginary.ai/dashboard"
-        assert result.structuredContent["challenge"] == challenge
+        # x402 fields are spread at top level (no nested `challenge` key)
+        assert result.structuredContent["accepts"] == challenge["accepts"]
+        assert result.structuredContent["x402Version"] == 2
         assert "x402" in result.structuredContent["message"]
 
     def test_error_message_not_duplicated(self, monkeypatch):

@@ -44,17 +44,23 @@ Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/). Alternatively: `pip 
 
 ## configuration
 
-Environment variables (all optional for local use):
+Nothing is required. For the stdio server you'll at most set one variable:
 
 | var | default | meaning |
 |---|---|---|
 | `MAGINARY_API_KEY` | — | Bearer token from [app.maginary.ai/dashboard#api-keys](https://app.maginary.ai/dashboard#api-keys). Skips the in-chat signup flow. Catalog tools work without it. |
 | `MAGINARY_BASE_URL` | `https://app.maginary.ai/api` | Override for staging or self-hosted. |
-| `MAGINARY_PUBLIC_HOST` | `app.maginary.ai` | Hosted mode only. Sent to the backend as `X-Forwarded-Host` (with `-Proto`/`-For`) when `MAGINARY_BASE_URL` is an internal address, so the backend builds public URLs. |
-| `MAGINARY_MCP_REQUIRE_AUTH` | off | Hosted mode only. On: every `/mcp` call needs a Bearer (OAuth token or API key); without one the server answers 401 + `WWW-Authenticate` pointing at `/.well-known/oauth-protected-resource`, which is how Claude/ChatGPT start the login. Trade-off: a wallet-only agent has no Bearer to send, so with the gate on it must make its first x402 payment over plain HTTP (`POST /api/gens/` returns an API key) and connect with that key; the 401 body says so. |
-| `MAGINARY_OAUTH_ISSUER` | `https://app.maginary.ai/o` | The authorization server named in the protected-resource metadata (the backend, django-oauth-toolkit). |
-| `MAGINARY_MCP_RESOURCE_URL` | `https://mcp.maginary.ai/mcp` | This server's canonical resource identifier (RFC 8707 audience). |
 | `MAGINARY_MCP_LOG_LEVEL` | `INFO` | Standard Python log level; goes to stderr (stdout is reserved for MCP JSON-RPC). |
+
+The rest only apply when you run the hosted server yourself (`maginary-mcp-http`, see below). Directory pages that scan the code list them too; ignore them for local use.
+
+| var (hosted only) | default | meaning |
+|---|---|---|
+| `MAGINARY_MCP_HOST` / `MAGINARY_MCP_PORT` | `0.0.0.0` / `8642` | Bind address of the HTTP server. |
+| `MAGINARY_PUBLIC_HOST` | `app.maginary.ai` | Sent to the backend as `X-Forwarded-Host` (with `-Proto`/`-For`) when `MAGINARY_BASE_URL` is an internal address, so the backend builds public URLs. |
+| `MAGINARY_MCP_REQUIRE_AUTH` | off | On: every `/mcp` call needs a Bearer (OAuth token or API key); without one the server answers 401 + `WWW-Authenticate` pointing at `/.well-known/oauth-protected-resource`, which is how Claude/ChatGPT start the login. Trade-off: a wallet-only agent has no Bearer to send, so with the gate on it must make its first x402 payment over plain HTTP (`POST /api/gens/`) and then connect with a key from `POST /api/auth/wallet-account/`; the 401 body says so. |
+| `MAGINARY_OAUTH_ISSUER` | `https://app.maginary.ai/o` | The authorization server named in the protected-resource metadata (the backend, django-oauth-toolkit). |
+| `MAGINARY_MCP_RESOURCE_URL` | `https://mcp.maginary.ai/mcp` | This server's canonical resource identifier (RFC 8707 audience). Also what `/.well-known/mcp/server-card.json` advertises. |
 
 ## hosted (no-install) — Streamable HTTP
 
@@ -145,8 +151,10 @@ maginary-mcp-http          # serves /mcp on 0.0.0.0:8642 (MAGINARY_MCP_PORT to c
 docker build -t maginary-mcp . && docker run -p 8642:8642 maginary-mcp
 ```
 
-The hosted server sets **no** `MAGINARY_API_KEY` (keys come per-request). Extra
-env: `MAGINARY_MCP_HOST` (default `0.0.0.0`), `MAGINARY_MCP_PORT` (default `8642`).
+The hosted server sets **no** `MAGINARY_API_KEY` (keys come per-request). It also
+serves `/health`, a human page at `GET /`, the OAuth protected-resource metadata
+and an MCP server card at `/.well-known/mcp/server-card.json` (live tool list,
+auth posture) for directories that scan a bare URL.
 
 ## Claude Skill
 

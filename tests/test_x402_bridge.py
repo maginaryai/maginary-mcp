@@ -82,7 +82,7 @@ class TestPaymentRequiredShape:
         assert body["resource"]["url"].endswith("/api/gens/")
         assert body["x402Version"] == 2
         assert "No account" in body["message"]                # the x402 human text moved here
-        assert body["challenge"] == CHALLENGE                 # deprecated duplicate, one release
+        assert "challenge" not in body                         # deprecated duplicate removed
         text = json.loads(result.content[0].text)
         assert "accepts" in text                              # the text form the SDK parses
 
