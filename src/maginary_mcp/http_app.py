@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import logging
 import os
-from pathlib import Path
 
 from .api import request_api_key
 
@@ -331,37 +330,11 @@ def build_app():
     return app
 
 
-_INDEX_TEMPLATE = Path(__file__).with_name("index.html")
-
 
 async def _index_page(request):
-    """Human landing for the MCP host. Tools are listed live so it can't drift."""
-    from html import escape
-    from string import Template
-    from starlette.responses import HTMLResponse
-
-    from . import __version__
-    from .server import mcp
-
-    endpoint = str(request.url.replace(path=mcp.settings.streamable_http_path, query="", fragment=""))
-    tools = await mcp.list_tools()
-    def _summary(description: str | None) -> str:
-        # First sentence of the docstring, backticks dropped, first letter
-        # lowercased to match the page's voice (acronyms mid-sentence stay).
-        s = (description or "").split(".")[0].replace("`", "").strip()
-        return s[:1].lower() + s[1:]
-
-    tools_html = "".join(
-        f"<li><code>{escape(t.name)}</code><span>{escape(_summary(t.description))}</span></li>"
-        for t in tools
-    )
-    html = Template(_INDEX_TEMPLATE.read_text(encoding="utf-8")).safe_substitute(
-        endpoint=escape(endpoint),
-        tools=tools_html,
-        tool_count=str(len(tools)),
-        version=escape(__version__),
-    )
-    return HTMLResponse(html, headers={"Cache-Control": "public, max-age=300"})
+    """Redirect humans to the canonical MCP landing page."""
+    from starlette.responses import RedirectResponse
+    return RedirectResponse("https://maginary.ai/mcp", status_code=301)
 
 
 def main() -> None:
