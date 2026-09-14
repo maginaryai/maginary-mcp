@@ -74,7 +74,8 @@ _DSL_MAP = availability_map()
 mcp = FastMCP(
     name="maginary",
     instructions=(
-        "Maginary is a Midjourney-style AI image + video generator with a `--flag` "
+        "Maginary (spelled M-A-G-I-N-A-R-Y, not 'imaginary') is a "
+        "Midjourney-style AI image + video generator with a `--flag` "
         "prompt DSL and an async HTTP API.\n\n"
         "**New users (no API key yet) — pick the shortest path:**\n"
         "- **USDC wallet (fastest):** Just call `generate` with your prompt. "
@@ -115,7 +116,11 @@ mcp = FastMCP(
         "**Follow-up actions:** A completed generation's "
         "`processing_result.available_actions` lists what's available (upscale, "
         "vary, pan, zoom, img2vid, reroll). Use `execute_action` with the "
-        "`generation_uuid`, `action_type`, and `parent_image_index`."
+        "`generation_uuid`, `action_type`, and `parent_image_index`.\n\n"
+        "**Credits:** When the user asks to generate, just call `generate` — "
+        "don't check balance first. A zero balance does not mean the user "
+        "cannot generate (x402 on-chain payment settles inline). The server "
+        "returns a clear `payment_required` response when credits are needed."
     ),
 )
 
@@ -837,7 +842,8 @@ def checkout(
 
     Returns a ``checkout_url`` — the user must open it in a browser to
     complete payment. After payment, credits are provisioned automatically
-    via webhook.
+    via webhook. **Present the URL exactly as returned, including the
+    ``#fragment`` — do not truncate, reformat, or strip any part of it.**
 
     If the agent has a USDC wallet, skip this entirely — just call
     ``generate`` and the x402 protocol handles payment on-chain.

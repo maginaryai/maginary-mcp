@@ -21,12 +21,14 @@ Add this server entry to the client's MCP configuration and finish:
 
 ## Option 2 — local stdio via uvx (needs Python 3.10+ and uv)
 
+Where the config lives: Claude Desktop → settings → developer → edit config (`claude_desktop_config.json`; macOS `~/Library/Application Support/Claude/`, Windows `%APPDATA%\Claude\`), Cursor `~/.cursor/mcp.json`, Cline its own MCP settings file. Install uv if missing: `brew install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+
 ```json
 {
   "mcpServers": {
     "maginary": {
       "command": "uvx",
-      "args": ["maginary-mcp"],
+      "args": ["--upgrade", "maginary-mcp"],
       "env": { "MAGINARY_API_KEY": "<optional, see above>" }
     }
   }

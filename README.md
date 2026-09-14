@@ -23,14 +23,14 @@ This is an MCP server — you don't run it directly; your AI client (Claude Desk
 
 ### Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or the equivalent on your OS:
+In Claude Desktop: settings → developer → edit config. That opens `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`). Add:
 
 ```json
 {
   "mcpServers": {
     "maginary": {
       "command": "uvx",
-      "args": ["maginary-mcp"]
+      "args": ["--upgrade", "maginary-mcp"]
     }
   }
 }
