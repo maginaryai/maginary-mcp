@@ -16,8 +16,8 @@ Add this server entry to the client's MCP configuration and finish:
 
 - Cline / Cursor / VS Code / Windsurf: `type` is `streamableHttp` (or `http`) if the client asks for one.
 - No credential is required to connect. Catalog tools work immediately.
-- For generation the user needs an account. Either the user pastes an API key from https://app.maginary.ai/dashboard#api-keys as `"headers": { "Authorization": "Bearer <key>" }`, or you call the `create_account` tool with their email, wait for `check_account_status` to report verified, then `manage_api_key(action="create")` and `configure_api_key`.
-- If the client supports MCP OAuth ("Connect" button), that also works with no header.
+- For generation the user needs an account. Either the user pastes an API key from https://app.maginary.ai/dashboard#api-keys as `"headers": { "Authorization": "Bearer <key>" }`, or you create one: call `create_account` with their email, wait for `check_account_status` to report verified, then `manage_api_key(action="create")` returns the key. The hosted server stores nothing per session, so put that key into the same `headers` entry (edit the client config) and reconnect. `configure_api_key` only persists keys on the local server (Option 2).
+- If the client cannot send headers (Claude Desktop custom connectors on individual plans), use Option 2.
 
 ## Option 2 — local stdio via uvx (needs Python 3.10+ and uv)
 

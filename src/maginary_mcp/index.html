@@ -185,7 +185,7 @@
     }
   }
 }</pre>
-    <p class="note">catalog tools work with no key. generation tools need one: <a href="https://app.maginary.ai/dashboard#api-keys">create it in the dashboard</a>, or let your agent do it with <code>create_account</code> then <code>manage_api_key</code>.</p>
+    <p class="note">catalog tools work with no key. generation tools need one on every request (this server stores nothing per session): <a href="https://app.maginary.ai/dashboard#api-keys">create it in the dashboard</a>, or let your agent do it with <code>create_account</code> then <code>manage_api_key</code> and put the result in your client's <code>Authorization: Bearer</code> header. wallets skip all of this and pay per call via x402.</p>
   </section>
 
   <section class="card">
