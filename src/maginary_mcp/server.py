@@ -24,7 +24,9 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import Field
 
 from mcp.types import ToolAnnotations
 from mcp.server.fastmcp import Context, FastMCP
@@ -138,9 +140,9 @@ def _ann(*, read_only: bool = False, destructive: bool = False, idempotent: bool
 
 @mcp.tool(title="List parameters", annotations=_ann(read_only=True, idempotent=True, open_world=False))
 def list_parameters(
-    category: str | None = None,
-    status: str | None = None,
-    include_reserved: bool = False,
+    category: Annotated[str | None, Field(description="Filter by category, e.g. composition, video, model, outpaint.")] = None,
+    status: Annotated[str | None, Field(description="Filter by status: live, mostly-dead, or unimplemented.")] = None,
+    include_reserved: Annotated[bool, Field(description="Include unimplemented (blocked) parameters.")] = False,
 ) -> dict[str, Any]:
     """List Maginary prompt-DSL parameters.
 
@@ -176,9 +178,9 @@ def list_parameters(
 
 @mcp.tool(title="Search parameters", annotations=_ann(read_only=True, idempotent=True, open_world=False))
 def search_parameters(
-    query: str,
-    category: str | None = None,
-    include_reserved: bool = False,
+    query: Annotated[str, Field(description="Search term (case-insensitive substring match).")],
+    category: Annotated[str | None, Field(description="Filter by category, e.g. composition, video, model.")] = None,
+    include_reserved: Annotated[bool, Field(description="Include unimplemented (blocked) parameters.")] = False,
 ) -> dict[str, Any]:
     """Text-search over parameter names, aliases, descriptions, values, examples.
 
@@ -204,7 +206,7 @@ def search_parameters(
 
 
 @mcp.tool(title="Get parameter", annotations=_ann(read_only=True, idempotent=True, open_world=False))
-def get_parameter(name: str) -> dict[str, Any]:
+def get_parameter(name: Annotated[str, Field(description="Parameter name with or without --, e.g. ar, --ar, aspect.")]) -> dict[str, Any]:
     """Return the full record for a single parameter (canonical name or alias).
 
     Args:
@@ -381,7 +383,11 @@ def _with_images(record: dict[str, Any]) -> dict[str, Any] | CallToolResult:
 
 @mcp.tool(title="Generate image or video", annotations=_ann(idempotent=False))
 @_tool_errors
-def generate(prompt: str, callback_url: str | None = None, ctx: Context | None = None) -> dict[str, Any]:
+def generate(
+    prompt: Annotated[str, Field(description="The user's words as-is, flags at the end. Do NOT add flags the user did not ask for.")],
+    callback_url: Annotated[str | None, Field(description="HTTPS webhook URL for done/failed notifications.")] = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
     """Kick off a generation via POST /api/gens/.
 
     Args:
@@ -476,7 +482,10 @@ _append_dsl_map_to_tool("generate")
 
 @mcp.tool(title="Get generation", annotations=_ann(read_only=True, idempotent=True))
 @_tool_errors
-def get_generation(uuid: str, ctx: Context | None = None) -> dict[str, Any]:
+def get_generation(
+    uuid: Annotated[str, Field(description="Generation UUID from generate or execute_action.")],
+    ctx: Context | None = None,
+) -> dict[str, Any]:
     """Fetch a generation by UUID (GET /api/gens/{uuid}/).
 
     Args:
@@ -505,8 +514,11 @@ def get_generation(uuid: str, ctx: Context | None = None) -> dict[str, Any]:
 
 @mcp.tool(title="Wait for generation", annotations=_ann(read_only=True, idempotent=True))
 @_tool_errors
-def wait_for_generation(uuid: str, timeout_s: float = DEFAULT_WAIT_TIMEOUT_S,
-                        ctx: Context | None = None) -> dict[str, Any]:
+def wait_for_generation(
+    uuid: Annotated[str, Field(description="Generation UUID to poll.")],
+    timeout_s: Annotated[float, Field(description="Max seconds to wait before returning a timeout result.")] = DEFAULT_WAIT_TIMEOUT_S,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
     """Poll ``get_generation`` on a backoff until it reaches done / failed.
 
     Args:
@@ -543,7 +555,11 @@ _IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif
 
 @mcp.tool(title="Upload image", annotations=_ann(idempotent=True))
 @_tool_errors
-def upload_image(file_path: str, filename: str | None = None, ctx: Context | None = None) -> dict[str, Any]:
+def upload_image(
+    file_path: Annotated[str, Field(description="Path to a local image (JPEG, PNG, WebP, HEIC).")],
+    filename: Annotated[str | None, Field(description="Override filename. Inferred from file_path if omitted.")] = None,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
     """Upload a local image and get a CDN URL for img2img or ``--sref``.
 
     Only available on local (stdio) connections.  On hosted/remote
@@ -584,11 +600,11 @@ def upload_image(file_path: str, filename: str | None = None, ctx: Context | Non
 @mcp.tool(title="Run action on image", annotations=_ann(idempotent=False))
 @_tool_errors
 def execute_action(
-    generation_uuid: str,
-    action_type: str,
-    parent_image_index: int | None = None,
-    prompt: str | None = None,
-    callback_url: str | None = None,
+    generation_uuid: Annotated[str, Field(description="UUID of the parent generation.")],
+    action_type: Annotated[str, Field(description="Action from available_actions, e.g. upscale_2x, vary_strong, img2vid_basic, reroll.")],
+    parent_image_index: Annotated[int | None, Field(description="Slot index (0-3) of the image to act on. Omit for global actions like reroll.")] = None,
+    prompt: Annotated[str | None, Field(description="Optional replacement prompt for vary/img2vid actions.")] = None,
+    callback_url: Annotated[str | None, Field(description="HTTPS webhook URL for done/failed notifications.")] = None,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
     """Run a follow-up action on a completed generation's image.
@@ -639,7 +655,7 @@ def execute_action(
 
 @mcp.tool(title="Create account", annotations=_ann(idempotent=False))
 @_tool_errors
-def create_account(email: str) -> dict[str, Any]:
+def create_account(email: Annotated[str, Field(description="Email address for the new account.")]) -> dict[str, Any]:
     """Create a new Maginary account for the given email address.
 
     Returns the auto-generated password — display it to the user ONCE so they
@@ -665,9 +681,9 @@ def create_account(email: str) -> dict[str, Any]:
 @mcp.tool(title="Create wallet account", annotations=_ann(destructive=True, idempotent=False))
 @_tool_errors
 def create_wallet_account(
-    address: str,
-    signature: str,
-    timestamp: int,
+    address: Annotated[str, Field(description="EVM wallet address (0x..., 42 chars).")],
+    signature: Annotated[str, Field(description="Hex EIP-191 personal_sign of the auth message.")],
+    timestamp: Annotated[int, Field(description="Unix epoch seconds used in the signed message.")],
 ) -> dict[str, Any]:
     """Create (or access) a Maginary account using a wallet signature.
 
@@ -702,8 +718,8 @@ def create_wallet_account(
 @mcp.tool(title="Check account status", annotations=_ann(read_only=True, idempotent=True))
 @_tool_errors
 def check_account_status(
-    email: str | None = None,
-    password: str | None = None,
+    email: Annotated[str | None, Field(description="Account email (for Basic auth). Omit to use API key.")] = None,
+    password: Annotated[str | None, Field(description="Account password (for Basic auth).")] = None,
 ) -> dict[str, Any]:
     """Check account verification status, credit balance, and API key count.
 
@@ -728,11 +744,11 @@ def check_account_status(
 @mcp.tool(title="Manage API key", annotations=_ann(destructive=True, idempotent=False))
 @_tool_errors
 def manage_api_key(
-    action: str,
-    name: str | None = None,
-    key_prefix: str | None = None,
-    email: str | None = None,
-    password: str | None = None,
+    action: Annotated[str, Field(description="One of: create, list, revoke.")],
+    name: Annotated[str | None, Field(description="Key name (required for create).")] = None,
+    key_prefix: Annotated[str | None, Field(description="8-char prefix of key to revoke (required for revoke).")] = None,
+    email: Annotated[str | None, Field(description="Account email (for Basic auth).")] = None,
+    password: Annotated[str | None, Field(description="Account password (for Basic auth).")] = None,
 ) -> dict[str, Any]:
     """Create, list, or revoke Maginary API keys (up to 10 per account).
 
@@ -767,7 +783,7 @@ def manage_api_key(
 
 @mcp.tool(title="Configure API key", annotations=_ann(idempotent=True, open_world=False))
 @_tool_errors
-def configure_api_key(api_key: str) -> dict[str, Any]:
+def configure_api_key(api_key: Annotated[str, Field(description="Full API key string from manage_api_key.")]) -> dict[str, Any]:
     """Activate an API key. Local (stdio) servers persist it; hosted does not.
 
     Call this after ``manage_api_key(action='create')`` returns a ``raw_key``.
@@ -834,9 +850,9 @@ def get_products() -> dict[str, Any]:
 @mcp.tool(title="Create checkout link", annotations=_ann(idempotent=False))
 @_tool_errors
 def checkout(
-    product_id: int,
-    email: str | None = None,
-    password: str | None = None,
+    product_id: Annotated[int, Field(description="Product ID from get_products.")],
+    email: Annotated[str | None, Field(description="Account email (for Basic auth during onboarding).")] = None,
+    password: Annotated[str | None, Field(description="Account password (for Basic auth).")] = None,
 ) -> dict[str, Any]:
     """Create a Stripe checkout session for purchasing a product.
 
@@ -864,8 +880,8 @@ def checkout(
 @mcp.tool(title="Get balance", annotations=_ann(read_only=True, idempotent=True))
 @_tool_errors
 def get_balance(
-    email: str | None = None,
-    password: str | None = None,
+    email: Annotated[str | None, Field(description="Account email (for Basic auth).")] = None,
+    password: Annotated[str | None, Field(description="Account password (for Basic auth).")] = None,
 ) -> dict[str, Any]:
     """Check remaining credits and uploads for the authenticated account.
 
