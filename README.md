@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/maginary-mcp)](https://pypi.org/project/maginary-mcp/) [![Python](https://img.shields.io/pypi/pyversions/maginary-mcp)](https://pypi.org/project/maginary-mcp/) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![smithery badge](https://smithery.ai/badge/maginaryai/maginary-mcp)](https://smithery.ai/servers/maginaryai/maginary-mcp)
 
-Model Context Protocol server for [Maginary](https://maginary.ai) — enumerate the prompt-DSL flags the engine accepts, kick off generations, and poll for results, all from inside your MCP-compatible client (Claude Desktop, Cursor, Continue, custom).
+Model Context Protocol server for [Maginary](https://maginary.ai) — an abstracted OpenRouter for images and video: ~20 model families (GPT-image-2, Seedance 2, Sora 2, Nano Banana Pro, Flux…) behind one Midjourney-style `--flag` prompt. 16 tools: full flag catalog, generate / upscale / vary / animate, in-chat signup, billing, and x402 pay-per-use for agents with a wallet.
 
 <!-- mcp-name: io.github.maginaryai/maginary-mcp -->
 <!-- The line above is how the official MCP Registry verifies this PyPI package belongs to the server
