@@ -1,6 +1,6 @@
 # maginary-mcp
 
-[![PyPI](https://img.shields.io/pypi/v/maginary-mcp)](https://pypi.org/project/maginary-mcp/) [![Python](https://img.shields.io/pypi/pyversions/maginary-mcp)](https://pypi.org/project/maginary-mcp/) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![smithery badge](https://smithery.ai/badge/maginaryai/maginary-mcp)](https://smithery.ai/servers/maginaryai/maginary-mcp)
+[![PyPI](https://img.shields.io/pypi/v/maginary-mcp)](https://pypi.org/project/maginary-mcp/) [![Python](https://img.shields.io/pypi/pyversions/maginary-mcp)](https://pypi.org/project/maginary-mcp/) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![smithery badge](https://smithery.ai/badge/maginaryai/maginary-mcp)](https://smithery.ai/servers/maginaryai/maginary-mcp) [![Maginary Mcp on AI Agents Listing](https://aiagentslisting.com/maginary-mcp/badge.svg?claim=6d4fae69e960028ae4f25cfe34dcf8e2)](https://aiagentslisting.com/mcp/maginary-mcp)
 
 Model Context Protocol server for [Maginary](https://maginary.ai) — an abstracted OpenRouter for images and video: ~20 model families (GPT-image-2, Seedance 2, Sora 2, Nano Banana Pro, Flux…) behind one Midjourney-style `--flag` prompt. 16 tools: full flag catalog, generate / upscale / vary / animate, in-chat signup, billing, and x402 pay-per-use for agents with a wallet.
 
